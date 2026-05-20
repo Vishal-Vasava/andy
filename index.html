@@ -530,7 +530,7 @@ Be precise and actionable.`;
       { id: 'triggers',    label: 'Triggers',     icon: '⚡' },
       { id: 'journal',     label: 'Journal',      icon: '📓' },
       { id: 'mind',        label: 'Mind',         icon: '🧠' },
-      { id: 'sensei',      label: 'Sensei',       icon: '🥋' },
+      { id: 'sensei',      label: 'Sensei',       icon: <img src="Sensei.png" alt="" style={{width:18,height:18,borderRadius:'50%',objectFit:'cover',display:'inline-block'}} /> },
       { id: 'vision',      label: 'Vision',       icon: '🌟' },
       { id: 'settings',    label: 'Settings',     icon: '⚙️' },
     ];
@@ -4116,7 +4116,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
           {/* Header */}
           <div className="bg-indigo-950 px-6 py-5 shrink-0">
             <div className="flex items-center gap-3 mb-1">
-              <img src="andy2.png" alt="Sensei" className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-700" />
+              <img src="Sensei.png" alt="Sensei" className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-700" />
               <div>
                 <div className="text-white font-bold text-lg tracking-tight">Sensei</div>
                 <div className="text-indigo-400 text-xs">Autonomous life coach · habit · planning · execution · mind</div>
@@ -4138,7 +4138,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {!hasBackend && steps.length === 0 && !running && (
               <div className="text-center py-16 text-gray-400 text-sm">
-                <div className="text-4xl mb-3">🥋</div>
+                <img src="Sensei.png" alt="Sensei" className="w-16 h-16 rounded-full object-cover mx-auto mb-3 opacity-60" />
                 <p className="font-medium text-gray-600 mb-1">Sensei needs a backend</p>
                 <p>Configure SenseiAI or Claude in <span className="text-indigo-500 font-medium">Settings → Profile</span> first.</p>
               </div>
@@ -4146,7 +4146,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
 
             {hasBackend && steps.length === 0 && !running && (
               <div className="text-center py-16 text-gray-400 text-sm">
-                <div className="text-4xl mb-3">🥋</div>
+                <img src="Sensei.png" alt="Sensei" className="w-16 h-16 rounded-full object-cover mx-auto mb-3 opacity-60" />
                 <p className="font-medium text-gray-600 mb-1">Ready when you are</p>
                 <p>Pick a mode above or ask anything below.</p>
               </div>

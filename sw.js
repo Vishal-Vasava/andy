@@ -1,4 +1,4 @@
-const CACHE = 'andy-v7';
+const CACHE = 'andy-v8';
 const LOCAL_ASSETS = [
   '/',
   '/index.html',
@@ -9,6 +9,7 @@ const LOCAL_ASSETS = [
   '/andy1-192.png',
   '/andy1-512.png',
   '/andy2.png',
+  '/Sensei.png',
 ];
 
 self.addEventListener('install', e => {
