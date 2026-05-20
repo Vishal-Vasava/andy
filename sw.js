@@ -1,4 +1,4 @@
-const CACHE = 'andy-v4';
+const CACHE = 'andy-v5';
 const LOCAL_ASSETS = [
   '/',
   '/index.html',
@@ -6,6 +6,8 @@ const LOCAL_ASSETS = [
   '/chatService.js',
   '/manifest.json',
   '/andy1.png',
+  '/andy1-192.png',
+  '/andy1-512.png',
   '/andy2.png',
 ];
 

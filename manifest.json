@@ -11,13 +11,13 @@
   "categories": ["productivity", "lifestyle"],
   "icons": [
     {
-      "src": "andy1.png",
+      "src": "andy1-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "andy1.png",
+      "src": "andy1-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
