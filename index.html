@@ -3253,8 +3253,7 @@ Be precise and actionable.`;
       'where','here','come','came','does','didnt','dont','cant','wont','isnt',
     ]);
 
-    function ThoughtCard({ thought, isAnalyzing, onDelete }) {
-      const meta = EMOTION_META[thought.dominant] || EMOTION_META.neutral;
+    function ThoughtCard({ thought, isAnalyzing, onDelete, onRetry }) {
       const timeAgo = iso => {
         const m = Math.floor((Date.now() - new Date(iso)) / 60000);
         if (m < 1)  return 'just now';
@@ -3263,6 +3262,7 @@ Be precise and actionable.`;
         if (h < 24) return `${h}h ago`;
         return `${Math.floor(h / 24)}d ago`;
       };
+      const hasFailed = thought.analyzeError && !isAnalyzing;
       return (
         <div className="group rounded-xl border border-gray-100 bg-white px-4 py-3 hover:shadow-sm transition-shadow">
           <div className="flex items-start gap-2">
@@ -3271,7 +3271,13 @@ Be precise and actionable.`;
               <div className="flex items-center flex-wrap gap-2 mt-2">
                 <span className="text-xs text-gray-400">{timeAgo(thought.timestamp)}</span>
                 {isAnalyzing && <span className="text-xs text-indigo-400 animate-pulse">Analysing…</span>}
-                {thought.analyzed && !isAnalyzing && thought.emotions.slice(0, 3).map((e, i) => {
+                {hasFailed && (
+                  <span className="text-xs text-amber-500 flex items-center gap-1">
+                    ⚠ {thought.analyzeError}
+                    <button onClick={onRetry} className="underline hover:text-amber-700 ml-1">Retry</button>
+                  </span>
+                )}
+                {thought.analyzed && !isAnalyzing && !hasFailed && thought.emotions.slice(0, 3).map((e, i) => {
                   const em = EMOTION_META[e.type] || EMOTION_META.neutral;
                   return (
                     <span key={i} style={{ backgroundColor: em.bg, color: em.text }}
@@ -3364,26 +3370,55 @@ Be precise and actionable.`;
       const saveThoughts = list => { window.storage.set('mind:thoughts', list); };
 
       const analyzeThought = async (thought, list) => {
-        setAnalyzing(thought.id);
-        try {
-          const raw = await CS.callLLM(
-            'You are an emotion analyst. Analyse the emotion(s) in the thought. Return ONLY valid JSON with no markdown: { "emotions": [{ "type": "fear|greed|pride|happy|positive|negative|anxiety|love|anger|sad|neutral", "intensity": 0.0-1.0 }], "dominant": "one_emotion_type" }',
-            thought.text, 150
-          );
-          const cleaned = raw.replace(/```json\s*/i,'').replace(/```/g,'').trim();
-          const result  = JSON.parse(cleaned);
+        if (!window.storage.get('settings:endpoint_url') && !window.storage.get('settings:api_key')) {
           const updated = list.map(t => t.id === thought.id
-            ? { ...t, emotions: result.emotions || [], dominant: result.dominant || 'neutral', analyzed: true }
+            ? { ...t, analyzed: false, analyzeError: 'No AI backend — add API key or SenseiAI endpoint in Settings' }
             : t
           );
-          setThoughts(updated);
-          saveThoughts(updated);
-        } catch (_) {
-          const updated = list.map(t => t.id === thought.id ? { ...t, dominant: 'neutral', analyzed: true } : t);
-          setThoughts(updated);
-          saveThoughts(updated);
+          setThoughts(updated); saveThoughts(updated); return;
+        }
+
+        setAnalyzing(thought.id);
+        let raw = '';
+        try {
+          raw = await CS.callLLM(
+            `Classify the emotions expressed in the following thought. You MUST return ONLY a raw JSON object — no explanation, no markdown, no code fences.
+
+Format: {"emotions":[{"type":"EMOTION","intensity":0.0}],"dominant":"EMOTION"}
+
+Valid emotion types: fear, greed, pride, happy, positive, negative, anxiety, love, anger, sad, neutral
+
+Examples:
+Thought: "I am terrified of losing my job" → {"emotions":[{"type":"fear","intensity":0.9},{"type":"anxiety","intensity":0.7}],"dominant":"fear"}
+Thought: "I feel so grateful today" → {"emotions":[{"type":"happy","intensity":0.8},{"type":"positive","intensity":0.7}],"dominant":"happy"}
+Thought: "I want more money than everyone else" → {"emotions":[{"type":"greed","intensity":0.8}],"dominant":"greed"}
+
+Now classify this thought:`,
+            thought.text, 250
+          );
+          const cleaned = raw.replace(/```json\s*/gi,'').replace(/```/g,'').trim();
+          const result  = JSON.parse(cleaned);
+          if (!result.dominant || !Array.isArray(result.emotions)) throw new Error('Unexpected response format');
+          const updated = list.map(t => t.id === thought.id
+            ? { ...t, emotions: result.emotions, dominant: result.dominant, analyzed: true, analyzeError: null }
+            : t
+          );
+          setThoughts(updated); saveThoughts(updated);
+        } catch (err) {
+          console.error('[Mind] analyzeThought failed:', err.message, '| raw response:', raw);
+          const updated = list.map(t => t.id === thought.id
+            ? { ...t, analyzed: false, analyzeError: err.message.length > 60 ? err.message.slice(0, 60) + '…' : err.message }
+            : t
+          );
+          setThoughts(updated); saveThoughts(updated);
         }
         setAnalyzing(null);
+      };
+
+      const retryAnalysis = (thought) => {
+        const reset = thoughts.map(t => t.id === thought.id ? { ...t, analyzeError: null } : t);
+        setThoughts(reset); saveThoughts(reset);
+        analyzeThought(thought, reset);
       };
 
       const submit = () => {
@@ -3409,17 +3444,25 @@ Be precise and actionable.`;
 
       return (
         <div className="flex flex-col h-full">
-          <div className="px-6 pt-6 pb-4 border-b border-gray-100 flex items-start justify-between">
+          <div className="px-6 pt-6 pb-4 border-b border-gray-100 flex items-start justify-between gap-2">
             <div>
               <h2 className="text-xl font-bold text-gray-900">Mind</h2>
               <p className="text-xs text-gray-400 mt-0.5">Capture thoughts · Understand patterns</p>
             </div>
-            <button onClick={() => setShowCloud(c => !c)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                showCloud ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-              }`}>
-              {showCloud ? 'Hide Cloud' : '☁️ Show Cloud'}
-            </button>
+            <div className="flex gap-2 flex-shrink-0">
+              {thoughts.some(t => t.analyzeError) && (
+                <button onClick={() => thoughts.filter(t => t.analyzeError).forEach(t => retryAnalysis(t))}
+                  className="px-3 py-2 rounded-xl text-sm font-medium bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors">
+                  ↺ Retry All
+                </button>
+              )}
+              <button onClick={() => setShowCloud(c => !c)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                  showCloud ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                }`}>
+                {showCloud ? 'Hide Cloud' : '☁️ Show Cloud'}
+              </button>
+            </div>
           </div>
 
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
@@ -3451,7 +3494,8 @@ Be precise and actionable.`;
             <div className="space-y-2">
               {thoughts.map(t => (
                 <ThoughtCard key={t.id} thought={t} isAnalyzing={analyzing === t.id}
-                  onDelete={() => deletThought(t.id)} />
+                  onDelete={() => deletThought(t.id)}
+                  onRetry={() => retryAnalysis(t)} />
               ))}
               {thoughts.length === 0 && (
                 <div className="text-center py-16 text-gray-400 text-sm">
