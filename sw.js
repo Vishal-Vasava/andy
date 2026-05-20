@@ -1,11 +1,12 @@
-const CACHE = 'andy-v3';
+const CACHE = 'andy-v4';
 const LOCAL_ASSETS = [
   '/',
   '/index.html',
   '/dataService.js',
   '/chatService.js',
   '/manifest.json',
-  '/icon.svg',
+  '/andy1.png',
+  '/andy2.png',
 ];
 
 self.addEventListener('install', e => {
@@ -45,8 +46,8 @@ self.addEventListener('message', e => {
     self.registration.showNotification(title, {
       body,
       tag,
-      icon:    '/icon.svg',
-      badge:   '/icon.svg',
+      icon:    '/andy1.png',
+      badge:   '/andy1.png',
       renotify: false,
       vibrate: [200, 100, 200],
     });
