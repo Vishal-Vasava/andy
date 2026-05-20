@@ -493,6 +493,7 @@ Be precise and actionable.`;
       { id: 'triggers',    label: 'Triggers',     icon: '⚡' },
       { id: 'journal',     label: 'Journal',      icon: '📓' },
       { id: 'mind',        label: 'Mind',         icon: '🧠' },
+      { id: 'sensei',      label: 'Sensei',       icon: '🥋' },
       { id: 'settings',    label: 'Settings',     icon: '⚙️' },
     ];
 
@@ -3521,6 +3522,283 @@ Now classify this thought:`,
       );
     }
 
+    // ─── Sensei Agent ─────────────────────────────────────────────────────────────
+
+    const SENSEI_TOOLS = {
+      get_habits: () => DS.habits.list().map(h => ({
+        name: h.name, frequency: h.frequency,
+        currentStreak: h.currentStreak, longestStreak: h.longestStreak,
+        adherence7d:  DS.habits.adherenceRate(h.id, 7),
+        adherence30d: DS.habits.adherenceRate(h.id, 30),
+        recentLog: (h.log || []).slice(-14).map(e => ({ date: e.date, done: e.done })),
+      })),
+
+      get_tasks: () => {
+        const today = DS.todayISO();
+        const open = DS.tasks.listOpen();
+        const all  = DS.tasks.list ? DS.tasks.list() : open;
+        return {
+          open: open.map(t => ({ id: t.id, title: t.title, priority: t.priority, dueDate: t.dueDate, deferralCount: t.deferralCount || 0, category: t.category })),
+          overdue: open.filter(t => t.dueDate && t.dueDate < today).map(t => ({ title: t.title, dueDate: t.dueDate, deferralCount: t.deferralCount || 0 })),
+          chronicallyDeferred: DS.tasks.listChronicallyDeferred(2).map(t => ({ title: t.title, deferralCount: t.deferralCount, dueDate: t.dueDate })),
+        };
+      },
+
+      get_deadlines: () => {
+        const today = DS.todayISO();
+        return DS.deadlines.list()
+          .filter(d => d.status !== 'done')
+          .map(d => ({ title: d.title, dueDate: d.dueDate, daysLeft: DS.daysUntil(d.dueDate), category: d.category, status: d.status }))
+          .sort((a, b) => a.daysLeft - b.daysLeft);
+      },
+
+      get_mind_thoughts: () => {
+        const raw = window.storage.get('mind:thoughts') || [];
+        return raw.slice(-30).map(t => ({ text: t.text, emotion: t.emotion, timestamp: t.timestamp }));
+      },
+
+      get_execution_stats: () => {
+        const open = DS.tasks.listOpen();
+        const deferred = DS.tasks.listChronicallyDeferred(2);
+        const today = DS.todayISO();
+        const overdue = open.filter(t => t.dueDate && t.dueDate < today);
+        const totalDeferred = open.reduce((s, t) => s + (t.deferralCount || 0), 0);
+        return {
+          openCount: open.length,
+          overdueCount: overdue.length,
+          chronicallyDeferredCount: deferred.length,
+          avgDeferralsPerTask: open.length ? +(totalDeferred / open.length).toFixed(1) : 0,
+          topDeferred: deferred.slice(0, 5).map(t => ({ title: t.title, deferralCount: t.deferralCount })),
+        };
+      },
+    };
+
+    const SENSEI_SYSTEM = `You are Sensei — an autonomous life coach and strategic planner inside Andy. You have access to the user's habits, tasks, deadlines, and logged mind thoughts.
+
+You reason in a loop before answering. Each response must be exactly one JSON object:
+
+{ "step": "think" | "tool" | "answer", "thought": "<your internal reasoning — always required>", "tool": "<tool name or null>", "args": null, "sections": null | [{ "icon": "<emoji>", "title": "<section title>", "content": "<plain text advice — no markdown>" }], "summary": null | "<1-2 sentence wrap-up>" }
+
+Rules:
+- Always start with a "think" step to plan your approach
+- Use "tool" steps to pull specific data before drawing conclusions
+- Each "tool" step: set tool to one of the available tool names, args to null
+- "answer" step ends the loop — include sections and summary
+- Be direct, warm, non-judgmental, specific — reference actual data you've seen
+- No markdown inside content fields. Plain sentences only.
+- Sections should only cover areas where you have real observations
+
+Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | get_execution_stats`;
+
+    async function runSenseiAgent(query, onStep) {
+      const MAX_STEPS = 7;
+      const history = [];
+
+      const baseCtx = (() => {
+        const ctx = CS.getFullContext();
+        return { today: ctx.today, user: ctx.user.name, overdue: ctx.overdue.length, dueToday: ctx.dueToday.length };
+      })();
+
+      let userMsg = `User request: "${query}"\n\nBasic snapshot: ${JSON.stringify(baseCtx)}\n\nBegin your reasoning.`;
+
+      for (let i = 0; i < MAX_STEPS; i++) {
+        let raw;
+        try {
+          raw = await CS.callLLM(SENSEI_SYSTEM, userMsg, 900, history);
+        } catch (err) {
+          onStep({ step: 'error', thought: err.message });
+          return;
+        }
+
+        // Strip fences
+        const cleaned = raw.replace(/^```json\s*/im, '').replace(/^```\s*/im, '').replace(/\s*```$/im, '').trim();
+        let parsed;
+        try { parsed = JSON.parse(cleaned); } catch (_) {
+          // Try to extract JSON object
+          const m = cleaned.match(/\{[\s\S]*\}/);
+          try { parsed = m ? JSON.parse(m[0]) : null; } catch (_) { parsed = null; }
+        }
+
+        if (!parsed) {
+          onStep({ step: 'error', thought: 'Could not parse Sensei response. Check backend connection.' });
+          return;
+        }
+
+        onStep(parsed);
+
+        if (parsed.step === 'answer') return;
+
+        // Build next message
+        history.push({ role: 'assistant', content: raw });
+
+        if (parsed.step === 'tool' && parsed.tool && SENSEI_TOOLS[parsed.tool]) {
+          let result;
+          try { result = SENSEI_TOOLS[parsed.tool](); } catch (e) { result = { error: e.message }; }
+          userMsg = `Tool "${parsed.tool}" returned: ${JSON.stringify(result)}\n\nContinue your reasoning.`;
+          history.push({ role: 'user', content: userMsg });
+        } else {
+          userMsg = 'Continue your reasoning.';
+          history.push({ role: 'user', content: userMsg });
+        }
+      }
+    }
+
+    // Quick-mode prompts
+    const SENSEI_MODES = [
+      { id: 'daily',     icon: '🌅', label: 'Daily Review',     query: 'Do a full daily review. Check my habits, tasks due today, overdue items, and recent mind thoughts. Give me a practical plan for today.' },
+      { id: 'week',      icon: '📆', label: 'Week Plan',         query: 'Plan my week. Analyse my deadlines, open tasks by priority, and habit momentum. Give me a clear focus and day-by-day guidance for the next 7 days.' },
+      { id: 'execution', icon: '⚙️', label: 'Execution Review',  query: 'Review my execution patterns. Look at task completion, deferral habits, overdue items. Diagnose why I might be stuck and give specific suggestions.' },
+      { id: 'mind',      icon: '🧘', label: 'Mind Coaching',     query: 'Analyse my logged thoughts from the Mind tab. Identify emotional patterns, recurring fears or themes, and help me think more clearly about what my mind is doing.' },
+    ];
+
+    function SenseiThoughtBubble({ step, idx }) {
+      const [open, setOpen] = React.useState(false);
+      if (step.step === 'answer') return null;
+      const isError = step.step === 'error';
+      const isTool  = step.step === 'tool';
+      const label   = isError ? '⚠ Error' : isTool ? `🔧 ${step.tool}` : `💭 Reasoning`;
+      return (
+        <div className={`rounded-xl border text-xs cursor-pointer select-none transition-colors ${isError ? 'border-red-200 bg-red-50' : 'border-indigo-100 bg-indigo-50'}`}
+          onClick={() => setOpen(o => !o)}>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <span className={`font-semibold ${isError ? 'text-red-600' : 'text-indigo-500'}`}>{label}</span>
+            <span className="text-gray-400 ml-auto">{open ? '▲' : '▼'}</span>
+          </div>
+          {open && <div className={`px-3 pb-3 leading-relaxed ${isError ? 'text-red-700' : 'text-indigo-800'}`}>{step.thought}</div>}
+        </div>
+      );
+    }
+
+    function SenseiAnswer({ sections, summary }) {
+      if (!sections && !summary) return null;
+      return (
+        <div className="space-y-3">
+          {summary && (
+            <div className="bg-indigo-600 text-white rounded-2xl px-4 py-3 text-sm leading-relaxed">
+              {summary}
+            </div>
+          )}
+          {(sections || []).map((s, i) => (
+            <div key={i} className="bg-white border border-gray-200 rounded-2xl px-4 py-3 space-y-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">{s.icon}</span>
+                <span className="font-semibold text-gray-800 text-sm">{s.title}</span>
+              </div>
+              <p className="text-gray-600 text-sm leading-relaxed">{s.content}</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function SenseiView() {
+      const [steps, setSteps]     = React.useState([]);
+      const [running, setRunning] = React.useState(false);
+      const [done, setDone]       = React.useState(false);
+      const [input, setInput]     = React.useState('');
+      const [answer, setAnswer]   = React.useState(null);
+      const bottomRef             = React.useRef(null);
+
+      const scrollToBottom = () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+      const run = async (query) => {
+        if (running || !query.trim()) return;
+        setSteps([]);
+        setAnswer(null);
+        setDone(false);
+        setRunning(true);
+        setInput('');
+        await runSenseiAgent(query.trim(), step => {
+          setSteps(prev => [...prev, step]);
+          if (step.step === 'answer') {
+            setAnswer({ sections: step.sections, summary: step.summary });
+            setDone(true);
+          }
+          setTimeout(scrollToBottom, 50);
+        });
+        setRunning(false);
+      };
+
+      const handleKey = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(input); } };
+
+      const hasBackend = !!(window.storage.get('settings:endpoint_url') || window.storage.get('settings:api_key'));
+
+      return (
+        <div className="flex flex-col h-full bg-slate-50">
+          {/* Header */}
+          <div className="bg-indigo-950 px-6 py-5 shrink-0">
+            <div className="flex items-center gap-3 mb-1">
+              <img src="andy2.png" alt="Sensei" className="w-9 h-9 rounded-full object-cover ring-2 ring-indigo-700" />
+              <div>
+                <div className="text-white font-bold text-lg tracking-tight">Sensei</div>
+                <div className="text-indigo-400 text-xs">Autonomous life coach · habit · planning · execution · mind</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick modes */}
+          <div className="px-4 py-3 flex gap-2 flex-wrap shrink-0 border-b border-gray-200 bg-white">
+            {SENSEI_MODES.map(m => (
+              <button key={m.id} onClick={() => run(m.query)} disabled={running}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-indigo-200 text-indigo-700 text-xs font-medium hover:bg-indigo-50 disabled:opacity-40 transition-colors bg-white">
+                <span>{m.icon}</span><span>{m.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+            {!hasBackend && steps.length === 0 && !running && (
+              <div className="text-center py-16 text-gray-400 text-sm">
+                <div className="text-4xl mb-3">🥋</div>
+                <p className="font-medium text-gray-600 mb-1">Sensei needs a backend</p>
+                <p>Configure SenseiAI or Claude in <span className="text-indigo-500 font-medium">Settings → Profile</span> first.</p>
+              </div>
+            )}
+
+            {hasBackend && steps.length === 0 && !running && (
+              <div className="text-center py-16 text-gray-400 text-sm">
+                <div className="text-4xl mb-3">🥋</div>
+                <p className="font-medium text-gray-600 mb-1">Ready when you are</p>
+                <p>Pick a mode above or ask anything below.</p>
+              </div>
+            )}
+
+            {/* Thinking steps */}
+            {steps.filter(s => s.step !== 'answer').map((s, i) => (
+              <SenseiThoughtBubble key={i} step={s} idx={i} />
+            ))}
+
+            {/* Running indicator */}
+            {running && (
+              <div className="flex items-center gap-2 text-indigo-500 text-xs px-1">
+                <span className="animate-pulse">●</span>
+                <span className="animate-pulse" style={{ animationDelay: '0.2s' }}>●</span>
+                <span className="animate-pulse" style={{ animationDelay: '0.4s' }}>●</span>
+                <span className="ml-1">Sensei is thinking…</span>
+              </div>
+            )}
+
+            {/* Final answer */}
+            {done && answer && <SenseiAnswer sections={answer.sections} summary={answer.summary} />}
+
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Input */}
+          <div className="px-4 py-3 border-t border-gray-200 bg-white flex gap-2 items-center shrink-0">
+            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+              placeholder="Ask Sensei anything…" disabled={running}
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50" />
+            <button onClick={() => run(input)} disabled={running || !input.trim()}
+              className="bg-indigo-950 hover:bg-indigo-800 disabled:opacity-40 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0">
+              Ask
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     // ─── Triggers ────────────────────────────────────────────────────────────────
     function TriggersView({ tick, onRefresh, onTriggerFired }) {
       const [filter, setFilter]         = useState('watching');
@@ -4543,6 +4821,7 @@ Now classify this thought:`,
                                        onTriggerFired={t => dispatch({ type:'ADD_TRIGGER_BANNER', payload: t })} />;
           case 'journal':     return <JournalView    {...sectionProps} />;
           case 'mind':        return <MindView       {...sectionProps} />;
+          case 'sensei':      return <SenseiView />;
           case 'settings':    return <SettingsView onRunAnalysis={runAnalysisCallback} insightsLoading={state.insightsLoading} onOpenDigest={generateDigest} />;
           default:            return <Dashboard   {...sectionProps} />;
         }
