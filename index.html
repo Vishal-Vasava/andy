@@ -3535,15 +3535,26 @@ Now classify this thought:`,
     ];
 
     function VisionBoardView() {
-      const [items, setItems]     = React.useState(() => {
+      const [items, setItems]         = React.useState(() => {
         try { return JSON.parse(window.storage.get('vision:items') || '[]'); } catch { return []; }
       });
-      const [drag, setDrag]       = React.useState(null);   // { id, sx, sy, ix, iy }
-      const [resize, setResize]   = React.useState(null);   // { id, sx, sw }
-      const [fileOver, setFileOver] = React.useState(false);
+      const [drag, setDrag]           = React.useState(null);
+      const [resize, setResize]       = React.useState(null);
+      const [fileOver, setFileOver]   = React.useState(false);
       const [editingId, setEditingId] = React.useState(null);
       const [selected, setSelected]   = React.useState(null);
-      const canvasRef = React.useRef(null);
+      const canvasRef   = React.useRef(null);
+      const fileInputRef = React.useRef(null);  // detached from JSX tree — avoids removeChild crash
+
+      // Auto-focus editing element without autoFocus prop
+      React.useEffect(() => {
+        if (!editingId) return;
+        const t = setTimeout(() => {
+          const el = canvasRef.current && canvasRef.current.querySelector('[data-edit-focus]');
+          if (el) el.focus();
+        }, 0);
+        return () => clearTimeout(t);
+      }, [editingId]);
 
       React.useEffect(() => {
         window.storage.set('vision:items', JSON.stringify(items));
@@ -3559,7 +3570,6 @@ Now classify this thought:`,
         setSelected(id);
       }
 
-      // ── Resize handle ────────────────────────────────────────────────────────────
       function onResizeMouseDown(e, id) {
         e.preventDefault();
         e.stopPropagation();
@@ -3574,8 +3584,7 @@ Now classify this thought:`,
             setItems(prev => prev.map(i => i.id === drag.id ? { ...i, x: drag.ix + dx, y: drag.iy + dy } : i));
           }
           if (resize) {
-            const dw = e.clientX - resize.sx;
-            const nw = Math.max(100, resize.sw + dw);
+            const nw = Math.max(100, resize.sw + (e.clientX - resize.sx));
             setItems(prev => prev.map(i => i.id === resize.id ? { ...i, width: nw } : i));
           }
         }
@@ -3585,24 +3594,18 @@ Now classify this thought:`,
         return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
       }, [drag, resize]);
 
-      // ── File drop ────────────────────────────────────────────────────────────────
-      function onDrop(e) {
-        e.preventDefault();
-        setFileOver(false);
-        const rect = canvasRef.current.getBoundingClientRect();
-        const scrollTop  = canvasRef.current.scrollTop;
-        const scrollLeft = canvasRef.current.scrollLeft;
-        const dropX = e.clientX - rect.left  + scrollLeft - 110;
-        const dropY = e.clientY - rect.top   + scrollTop  - 80;
-        Array.from(e.dataTransfer.files).forEach((file, fi) => {
+      // ── Read files helper (called from drop or file-input change) ─────────────────
+      function readFiles(files, baseX, baseY) {
+        Array.from(files).forEach((file, fi) => {
           if (!file.type.startsWith('image/')) return;
           const reader = new FileReader();
           reader.onload = ev => {
+            // Use functional updater — safe to call from async FileReader callback
             setItems(prev => [...prev, {
-              id: Date.now() + fi,
+              id: `img-${Date.now()}-${fi}`,
               type: 'photo',
-              x: Math.max(0, dropX + fi * 20),
-              y: Math.max(0, dropY + fi * 20),
+              x: Math.max(0, baseX + fi * 24),
+              y: Math.max(0, baseY + fi * 24),
               width: 220,
               content: ev.target.result,
               label: '',
@@ -3613,8 +3616,35 @@ Now classify this thought:`,
         });
       }
 
+      function onDrop(e) {
+        e.preventDefault();
+        setFileOver(false);
+        if (!canvasRef.current) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left  + canvasRef.current.scrollLeft - 110;
+        const y = e.clientY - rect.top   + canvasRef.current.scrollTop  - 80;
+        readFiles(e.dataTransfer.files, x, y);
+      }
+
+      // The file input lives in a detached ref — never inside the React-rendered tree
+      React.useEffect(() => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = true;
+        input.style.display = 'none';
+        input.addEventListener('change', () => {
+          readFiles(input.files, 60, 60);
+          input.value = '';   // safe: not a React-managed node
+        });
+        document.body.appendChild(input);
+        fileInputRef.current = input;
+        return () => { document.body.removeChild(input); fileInputRef.current = null; };
+      }, []);
+
       function addText() {
-        const id = Date.now();
+        const id = `txt-${Date.now()}`;
+        const ci = Math.floor(Math.random() * TEXT_COLORS.length);
         setItems(prev => [...prev, {
           id,
           type: 'text',
@@ -3622,8 +3652,8 @@ Now classify this thought:`,
           y: 60 + Math.random() * 200,
           width: 200,
           content: 'Double-click to edit',
-          bg: TEXT_COLORS[Math.floor(Math.random() * TEXT_COLORS.length)].bg,
-          border: TEXT_COLORS[Math.floor(Math.random() * TEXT_COLORS.length)].border,
+          bg: TEXT_COLORS[ci].bg,
+          border: TEXT_COLORS[ci].border,
           fontSize: 16,
           rotate: (Math.random() * 6 - 3).toFixed(1),
         }]);
@@ -3633,13 +3663,14 @@ Now classify this thought:`,
 
       function deleteItem(id) {
         setItems(prev => prev.filter(i => i.id !== id));
-        if (selected === id) setSelected(null);
-        if (editingId === id) setEditingId(null);
+        setSelected(s  => s  === id ? null : s);
+        setEditingId(e => e  === id ? null : e);
       }
 
       function bringToFront(id) {
         setItems(prev => {
           const item = prev.find(i => i.id === id);
+          if (!item) return prev;
           return [...prev.filter(i => i.id !== id), item];
         });
       }
@@ -3647,7 +3678,7 @@ Now classify this thought:`,
       function cycleColor(id) {
         setItems(prev => prev.map(item => {
           if (item.id !== id || item.type !== 'text') return item;
-          const cur = TEXT_COLORS.findIndex(c => c.bg === item.bg);
+          const cur  = TEXT_COLORS.findIndex(c => c.bg === item.bg);
           const next = TEXT_COLORS[(cur + 1) % TEXT_COLORS.length];
           return { ...item, bg: next.bg, border: next.border };
         }));
@@ -3658,42 +3689,25 @@ Now classify this thought:`,
       return (
         <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
           {/* Toolbar */}
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border-b border-slate-700 shrink-0">
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border-b border-slate-700 shrink-0 flex-wrap">
             <span className="text-white font-semibold text-sm mr-1">Vision Board</span>
             <button onClick={addText}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+              className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
               + Text
             </button>
-            <label className="flex items-center gap-1.5 bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors cursor-pointer">
+            <button onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              className="bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
               + Photo
-              <input type="file" accept="image/*" multiple className="hidden" onChange={e => {
-                Array.from(e.target.files).forEach((file, fi) => {
-                  const reader = new FileReader();
-                  reader.onload = ev => {
-                    setItems(prev => [...prev, {
-                      id: Date.now() + fi,
-                      type: 'photo',
-                      x: 60 + fi * 30,
-                      y: 60 + fi * 30,
-                      width: 220,
-                      content: ev.target.result,
-                      label: '',
-                      rotate: (Math.random() * 6 - 3).toFixed(1),
-                    }]);
-                  };
-                  reader.readAsDataURL(file);
-                });
-                e.target.value = '';
-              }} />
-            </label>
+            </button>
             {sel && (
               <>
                 {sel.type === 'text' && (
                   <>
                     <button onClick={() => cycleColor(sel.id)}
-                      className="w-6 h-6 rounded-full border-2 border-white/40 hover:border-white transition-colors cursor-pointer"
+                      className="w-6 h-6 rounded-full border-2 border-white/40 hover:border-white transition-colors"
                       style={{ background: sel.bg }} title="Cycle colour" />
-                    <select value={sel.fontSize || 16} onChange={e => setItems(prev => prev.map(i => i.id === sel.id ? { ...i, fontSize: +e.target.value } : i))}
+                    <select value={sel.fontSize || 16}
+                      onChange={e => setItems(prev => prev.map(i => i.id === sel.id ? { ...i, fontSize: +e.target.value } : i))}
                       className="bg-slate-700 text-white text-xs rounded-lg px-2 py-1.5 border border-slate-600">
                       {[12,14,16,20,24,32,40].map(s => <option key={s} value={s}>{s}px</option>)}
                     </select>
@@ -3709,83 +3723,78 @@ Now classify this thought:`,
                 </button>
               </>
             )}
-            <span className="ml-auto text-slate-400 text-xs">Drag photos here or use + Photo</span>
+            <span className="ml-auto text-slate-400 text-xs">Drag photos onto the board or use + Photo</span>
           </div>
 
           {/* Canvas */}
-          <div
-            ref={canvasRef}
-            className="flex-1 overflow-auto relative"
+          <div ref={canvasRef} className="flex-1 overflow-auto relative"
             style={{
               background: fileOver
-                ? 'rgba(99,102,241,0.15)'
+                ? 'rgba(99,102,241,0.12)'
                 : 'radial-gradient(ellipse at 20% 50%, #1e1b4b 0%, #0f172a 60%, #1a0a2e 100%)',
               cursor: drag ? 'grabbing' : 'default',
             }}
             onDragOver={e => { e.preventDefault(); setFileOver(true); }}
-            onDragLeave={() => setFileOver(false)}
+            onDragLeave={e => { if (!canvasRef.current.contains(e.relatedTarget)) setFileOver(false); }}
             onDrop={onDrop}
             onClick={() => { setSelected(null); setEditingId(null); }}
           >
-            {/* Drop hint when empty */}
             {items.length === 0 && (
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
                 <div className="text-6xl mb-4 opacity-20">🌟</div>
-                <p className="text-slate-500 text-sm">Drag & drop photos onto the board, or use + Photo / + Text</p>
+                <p className="text-slate-500 text-sm">Drag & drop photos, or use + Photo / + Text</p>
               </div>
             )}
-
-            {/* Drop highlight ring */}
             {fileOver && (
               <div className="absolute inset-4 border-2 border-dashed border-indigo-400 rounded-2xl pointer-events-none" />
             )}
 
-            {/* Board items */}
             <div className="relative" style={{ minWidth: 1400, minHeight: 900 }}>
               {items.map(item => {
-                const isSelected = selected === item.id;
+                const isSelected = selected  === item.id;
                 const isEditing  = editingId === item.id;
                 const rot = `rotate(${item.rotate || 0}deg)`;
 
                 if (item.type === 'photo') {
                   return (
                     <div key={item.id}
-                      style={{ position: 'absolute', left: item.x, top: item.y, width: item.width, transform: rot,
+                      style={{ position: 'absolute', left: item.x, top: item.y, width: item.width,
+                        transform: rot, userSelect: 'none', zIndex: isSelected ? 100 : 1,
                         boxShadow: isSelected ? '0 0 0 3px #818cf8, 0 8px 32px rgba(0,0,0,0.6)' : '0 8px 32px rgba(0,0,0,0.5)',
-                        cursor: drag?.id === item.id ? 'grabbing' : 'grab', userSelect: 'none', zIndex: isSelected ? 100 : 1 }}
+                        cursor: drag?.id === item.id ? 'grabbing' : 'grab' }}
                       onMouseDown={e => { onItemMouseDown(e, item.id); bringToFront(item.id); }}
                       onDoubleClick={e => { e.stopPropagation(); setEditingId(item.id); setSelected(item.id); }}
                     >
                       <div className="bg-white p-2 pb-6 rounded shadow-md">
-                        <img src={item.content} alt="" style={{ width: '100%', display: 'block', borderRadius: 2 }} draggable={false} />
-                        {isEditing ? (
-                          <input autoFocus className="mt-1 w-full text-center text-xs text-gray-600 bg-transparent border-b border-gray-300 outline-none"
-                            value={item.label} placeholder="Add caption…"
-                            onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
-                            onBlur={() => setEditingId(null)}
-                            onKeyDown={e => e.key === 'Enter' && setEditingId(null)}
-                            onClick={e => e.stopPropagation()}
-                          />
-                        ) : (
-                          <div className="mt-1 text-center text-xs text-gray-500 italic min-h-[16px]">{item.label}</div>
-                        )}
+                        <img src={item.content} alt="" draggable={false}
+                          style={{ width: '100%', display: 'block', borderRadius: 2 }} />
+                        {/* Always render the caption div; swap to input only when editing */}
+                        <div className="mt-1 min-h-[20px]" onClick={e => e.stopPropagation()}>
+                          {isEditing
+                            ? <input data-edit-focus
+                                className="w-full text-center text-xs text-gray-600 bg-transparent border-b border-gray-300 outline-none"
+                                value={item.label} placeholder="Add caption…"
+                                onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, label: e.target.value } : i))}
+                                onBlur={() => setEditingId(null)}
+                                onKeyDown={e => { if (e.key === 'Enter') setEditingId(null); }}
+                              />
+                            : <div className="text-center text-xs text-gray-500 italic">{item.label || ' '}</div>
+                          }
+                        </div>
                       </div>
-                      {/* Resize handle */}
-                      <div
-                        style={{ position: 'absolute', right: -6, bottom: -6, width: 16, height: 16,
+                      <div style={{ position: 'absolute', right: -6, bottom: -6, width: 16, height: 16,
                           background: '#818cf8', borderRadius: '50%', cursor: 'nwse-resize', border: '2px solid white' }}
-                        onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, item.id); }}
-                      />
+                        onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, item.id); }} />
                     </div>
                   );
                 }
 
-                // Text card
+                // Text sticky card
                 return (
                   <div key={item.id}
-                    style={{ position: 'absolute', left: item.x, top: item.y, width: item.width, transform: rot,
+                    style={{ position: 'absolute', left: item.x, top: item.y, width: item.width,
+                      transform: rot, borderRadius: 8, padding: '12px 14px', minHeight: 80,
                       background: item.bg || '#fef9c3', border: `2px solid ${item.border || '#fde047'}`,
-                      borderRadius: 8, padding: '12px 14px', minHeight: 80,
                       boxShadow: isSelected ? '0 0 0 3px #818cf8, 0 8px 24px rgba(0,0,0,0.5)' : '0 6px 20px rgba(0,0,0,0.4)',
                       cursor: isEditing ? 'text' : (drag?.id === item.id ? 'grabbing' : 'grab'),
                       userSelect: isEditing ? 'text' : 'none', zIndex: isSelected ? 100 : 1 }}
@@ -3793,27 +3802,24 @@ Now classify this thought:`,
                     onDoubleClick={e => { e.stopPropagation(); setEditingId(item.id); setSelected(item.id); }}
                     onClick={e => e.stopPropagation()}
                   >
-                    {isEditing ? (
-                      <textarea autoFocus
-                        style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none',
-                          fontSize: item.fontSize || 16, color: '#1e1b4b', resize: 'vertical',
-                          fontFamily: 'inherit', lineHeight: 1.5, minHeight: 56 }}
-                        value={item.content}
-                        onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, content: e.target.value } : i))}
-                        onBlur={() => setEditingId(null)}
-                        onClick={e => e.stopPropagation()}
-                      />
-                    ) : (
-                      <div style={{ fontSize: item.fontSize || 16, color: '#1e1b4b', lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {item.content}
-                      </div>
-                    )}
-                    {/* Resize handle */}
-                    <div
-                      style={{ position: 'absolute', right: -6, bottom: -6, width: 16, height: 16,
+                    {isEditing
+                      ? <textarea data-edit-focus
+                          style={{ width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                            fontSize: item.fontSize || 16, color: '#1e1b4b', resize: 'vertical',
+                            fontFamily: 'inherit', lineHeight: 1.5, minHeight: 56 }}
+                          value={item.content}
+                          onChange={e => setItems(prev => prev.map(i => i.id === item.id ? { ...i, content: e.target.value } : i))}
+                          onBlur={() => setEditingId(null)}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      : <div style={{ fontSize: item.fontSize || 16, color: '#1e1b4b', lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {item.content}
+                        </div>
+                    }
+                    <div style={{ position: 'absolute', right: -6, bottom: -6, width: 16, height: 16,
                         background: '#818cf8', borderRadius: '50%', cursor: 'nwse-resize', border: '2px solid white' }}
-                      onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, item.id); }}
-                    />
+                      onMouseDown={e => { e.stopPropagation(); onResizeMouseDown(e, item.id); }} />
                   </div>
                 );
               })}
