@@ -3626,21 +3626,12 @@ Now classify this thought:`,
         readFiles(e.dataTransfer.files, x, y);
       }
 
-      // The file input lives in a detached ref — never inside the React-rendered tree
-      React.useEffect(() => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.multiple = true;
-        input.style.display = 'none';
-        input.addEventListener('change', () => {
-          readFiles(input.files, 60, 60);
-          input.value = '';   // safe: not a React-managed node
-        });
-        document.body.appendChild(input);
-        fileInputRef.current = input;
-        return () => { document.body.removeChild(input); fileInputRef.current = null; };
-      }, []);
+      function handleFileChange() {
+        const files = fileInputRef.current && fileInputRef.current.files;
+        if (files && files.length) readFiles(files, 60, 60);
+        // Reset the input value after the reads are queued (not synchronously during onChange)
+        setTimeout(() => { if (fileInputRef.current) fileInputRef.current.value = ''; }, 0);
+      }
 
       function addText() {
         const id = `txt-${Date.now()}`;
@@ -3687,6 +3678,13 @@ Now classify this thought:`,
       const sel = items.find(i => i.id === selected);
 
       return (
+        <React.Fragment>
+        {/* Portal: React owns the file input lifecycle — no manual appendChild/removeChild */}
+        {ReactDOM.createPortal(
+          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{display:'none'}}
+            onChange={handleFileChange} />,
+          document.body
+        )}
         <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
           {/* Toolbar */}
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border-b border-slate-700 shrink-0 flex-wrap">
@@ -3826,6 +3824,7 @@ Now classify this thought:`,
             </div>
           </div>
         </div>
+        </React.Fragment>
       );
     }
 
