@@ -500,7 +500,7 @@ Be precise and actionable.`;
     // ─── Reducer ─────────────────────────────────────────────────────────────────
     function reducer(state, action) {
       switch (action.type) {
-        case 'NAV':         return { ...state, section: action.payload, seasonalBanner: action.payload === 'checklists' ? null : state.seasonalBanner };
+        case 'NAV':         window.storage.set('app:section', action.payload); return { ...state, section: action.payload, seasonalBanner: action.payload === 'checklists' ? null : state.seasonalBanner };
         case 'SEASONAL_BANNER': return { ...state, seasonalBanner: action.payload };
         case 'CHAT_INPUT':  return { ...state, chatInput: action.payload };
         case 'ADD_MSG':     return { ...state, messages: [...state.messages, action.payload] };
@@ -4495,8 +4495,10 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
     }
 
     // ─── App root ─────────────────────────────────────────────────────────────────
+    const VALID_SECTIONS = ['dashboard','tasks','deadlines','family','habits','medications','checklists','goals','triggers','journal','mind','sensei','settings'];
+
     const initState = {
-      section:        'dashboard',
+      section: (() => { const s = window.storage.get('app:section'); return VALID_SECTIONS.includes(s) ? s : 'dashboard'; })(),
       messages:       [],
       chatInput:      '',
       thinking:       false,
@@ -4615,12 +4617,12 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
         checkAndNotify();
         const notifTimer = setInterval(checkAndNotify, 30 * 60 * 1000);
 
-        // Show install banner if prompt was captured before React mounted
-        if (window._andyInstallPrompt) {
+        // Show install banner if not already running as a standalone PWA
+        if (!window.matchMedia('(display-mode: standalone)').matches) {
           dispatch({ type: 'SET_INSTALL_BANNER', payload: true });
         }
-        // Also listen for it firing after mount
-        const onInstallPrompt = () => dispatch({ type: 'SET_INSTALL_BANNER', payload: true });
+        // Capture deferred prompt if it arrives (enables one-click install)
+        const onInstallPrompt = e => { window._andyInstallPrompt = e; };
         window.addEventListener('beforeinstallprompt', onInstallPrompt);
 
         return () => {
@@ -4888,15 +4890,18 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
                   <span className="text-xl shrink-0">📲</span>
                   <div className="flex-1 min-w-0">
                     <span className="font-semibold text-white">Install Andy as an app</span>
-                    <span className="text-indigo-200"> — works offline, lives on your home screen</span>
+                    <span className="text-indigo-200"> — works offline, lives on your taskbar</span>
                   </div>
                   <button onClick={async () => {
                     if (window._andyInstallPrompt) {
                       window._andyInstallPrompt.prompt();
                       const { outcome } = await window._andyInstallPrompt.userChoice;
                       window._andyInstallPrompt = null;
+                      dispatch({ type: 'SET_INSTALL_BANNER', payload: false });
+                    } else {
+                      // Prompt already used or dismissed — guide user to browser menu
+                      alert('To install:\n\nChrome/Edge → click the ⊕ icon in the address bar\n  — or —\nMenu (⋮) → Cast, Save and Share → Install page as app');
                     }
-                    dispatch({ type: 'SET_INSTALL_BANNER', payload: false });
                   }} className="shrink-0 bg-white text-indigo-700 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-indigo-50 transition-colors">
                     Install
                   </button>
