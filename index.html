@@ -3543,8 +3543,25 @@ Now classify this thought:`,
       const [fileOver, setFileOver]   = React.useState(false);
       const [editingId, setEditingId] = React.useState(null);
       const [selected, setSelected]   = React.useState(null);
-      const canvasRef   = React.useRef(null);
-      const fileInputRef = React.useRef(null);  // detached from JSX tree — avoids removeChild crash
+      const canvasRef      = React.useRef(null);
+      // A detached input that is NEVER appended to any DOM node.
+      // Browsers allow .click() on detached file inputs; the picker opens normally.
+      // Because it has no parent, React (or anyone) never calls removeChild on it.
+      const detachedInput  = React.useRef(null);
+      const readFilesCbRef = React.useRef(null); // keeps readFiles fresh across renders
+
+      if (!detachedInput.current) {
+        const inp = document.createElement('input');
+        inp.type     = 'file';
+        inp.accept   = 'image/*';
+        inp.multiple = true;
+        inp.addEventListener('change', function () {
+          // readFilesCbRef.current is updated every render — always the latest version
+          if (readFilesCbRef.current) readFilesCbRef.current(inp.files, 60, 60);
+          setTimeout(function () { try { inp.value = ''; } catch (_) {} }, 0);
+        });
+        detachedInput.current = inp;
+      }
 
       // Auto-focus editing element without autoFocus prop
       React.useEffect(() => {
@@ -3594,13 +3611,12 @@ Now classify this thought:`,
         return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
       }, [drag, resize]);
 
-      // ── Read files helper (called from drop or file-input change) ─────────────────
+      // ── Read files — uses functional setItems updater so safe from any async context
       function readFiles(files, baseX, baseY) {
         Array.from(files).forEach((file, fi) => {
           if (!file.type.startsWith('image/')) return;
           const reader = new FileReader();
           reader.onload = ev => {
-            // Use functional updater — safe to call from async FileReader callback
             setItems(prev => [...prev, {
               id: `img-${Date.now()}-${fi}`,
               type: 'photo',
@@ -3615,6 +3631,8 @@ Now classify this thought:`,
           reader.readAsDataURL(file);
         });
       }
+      // Keep the ref current every render so the detached input's listener is always fresh
+      readFilesCbRef.current = readFiles;
 
       function onDrop(e) {
         e.preventDefault();
@@ -3624,13 +3642,6 @@ Now classify this thought:`,
         const x = e.clientX - rect.left  + canvasRef.current.scrollLeft - 110;
         const y = e.clientY - rect.top   + canvasRef.current.scrollTop  - 80;
         readFiles(e.dataTransfer.files, x, y);
-      }
-
-      function handleFileChange() {
-        const files = fileInputRef.current && fileInputRef.current.files;
-        if (files && files.length) readFiles(files, 60, 60);
-        // Reset the input value after the reads are queued (not synchronously during onChange)
-        setTimeout(() => { if (fileInputRef.current) fileInputRef.current.value = ''; }, 0);
       }
 
       function addText() {
@@ -3678,13 +3689,6 @@ Now classify this thought:`,
       const sel = items.find(i => i.id === selected);
 
       return (
-        <React.Fragment>
-        {/* Portal: React owns the file input lifecycle — no manual appendChild/removeChild */}
-        {ReactDOM.createPortal(
-          <input ref={fileInputRef} type="file" accept="image/*" multiple style={{display:'none'}}
-            onChange={handleFileChange} />,
-          document.body
-        )}
         <div className="flex flex-col h-full bg-slate-900 overflow-hidden">
           {/* Toolbar */}
           <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border-b border-slate-700 shrink-0 flex-wrap">
@@ -3693,7 +3697,7 @@ Now classify this thought:`,
               className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
               + Text
             </button>
-            <button onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            <button onClick={() => detachedInput.current && detachedInput.current.click()}
               className="bg-slate-600 hover:bg-slate-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
               + Photo
             </button>
@@ -3824,7 +3828,6 @@ Now classify this thought:`,
             </div>
           </div>
         </div>
-        </React.Fragment>
       );
     }
 
