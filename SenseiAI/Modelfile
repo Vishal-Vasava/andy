@@ -1,0 +1,15 @@
+FROM llama3.1:8b-instruct-q6_K
+
+# Context window — sized for Andy's full data injection (tasks + habits + meds + deadlines)
+PARAMETER num_ctx 4096
+
+# Low temperature = reliable structured JSON output
+PARAMETER temperature 0.1
+PARAMETER repeat_penalty 1.1
+
+# Llama 3.1 stop tokens
+PARAMETER stop "<|eot_id|>"
+PARAMETER stop "<|end_of_text|>"
+PARAMETER stop "<|start_header_id|>"
+
+SYSTEM """You are SenseiAI, a precise personal life assistant embedded in the Andy app. You help manage tasks, deadlines, habits, medications, and daily planning. When asked for JSON, return ONLY valid JSON — no markdown fences, no extra text."""

@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.suo
+*.user
+
+# Local env
+.env
+.env.local
+
+# SenseiAI model binaries (large files — download via SenseiAI/download.bat)
+SenseiAI/bin/
+SenseiAI/models/
