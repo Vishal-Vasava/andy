@@ -43,16 +43,16 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    // Show errors visibly instead of a blank page
+    // Show errors visibly — overlay on top of React DOM instead of replacing it.
+    // NEVER use root.innerHTML here: that nukes React's DOM nodes while React is
+    // still in its commit phase, causing removeChildFromContainer to crash.
     window.onerror = (msg, src, line, col, err) => {
-      const root = document.getElementById('root');
-      if (root && !root.querySelector('[data-err]')) {
-        root.innerHTML = `<div data-err style="padding:24px;font-family:monospace;color:#dc2626;background:#fef2f2;min-height:100vh">
-          <strong>Andy failed to start</strong><br><br>
-          ${msg}<br><small>Line ${line} · ${src}</small>
-          ${err ? '<br><br><pre style="white-space:pre-wrap;font-size:11px">' + err.stack + '</pre>' : ''}
-        </div>`;
-      }
+      if (document.querySelector('[data-err]')) return;
+      const div = document.createElement('div');
+      div.setAttribute('data-err', '');
+      div.style.cssText = 'position:fixed;inset:0;z-index:99999;padding:24px;font-family:monospace;color:#dc2626;background:#fef2f2;overflow:auto';
+      div.innerHTML = `<strong>Andy crashed</strong><br><br>${msg}<br><small>Line ${line} · ${src}</small>${err ? '<br><br><pre style="white-space:pre-wrap;font-size:11px">' + err.stack + '</pre>' : ''}`;
+      document.body.appendChild(div);
     };
 
     const { useState, useEffect, useReducer, useRef, useCallback } = React;
@@ -3645,7 +3645,15 @@ Now classify this thought:`,
       }, [editingId]);
 
       React.useEffect(() => {
-        window.storage.set('vision:items', JSON.stringify(items));
+        // Base64 photos can be several MB each — localStorage limit is ~5 MB total.
+        // Try to save everything; if quota exceeded, save text cards only so they survive.
+        try {
+          window.storage.set('vision:items', JSON.stringify(items));
+        } catch (_) {
+          try {
+            window.storage.set('vision:items', JSON.stringify(items.filter(i => i.type !== 'photo')));
+          } catch (_2) { /* even text-only is too large — skip */ }
+        }
       }, [items]);
 
       // ── Reposition drag ──────────────────────────────────────────────────────────
