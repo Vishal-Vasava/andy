@@ -1968,6 +1968,14 @@ Be precise and actionable.`;
         setShowAdd(false); onRefresh();
       };
 
+      const handleRemoveMember = (m, e) => {
+        e.stopPropagation();
+        if (!confirm(`Remove ${m.name} from your family? Their assigned tasks will remain but become unassigned.`)) return;
+        DS.family.delete(m.id);
+        if (selectedId === m.id) setSelectedId(null);
+        onRefresh();
+      };
+
       const handleAssignTask = (member, form) => {
         const isMinor = member.role === 'dependent' || (member.age && parseInt(member.age) < 18);
         const task = DS.tasks.create({ title: form.title, dueDate: form.dueDate || null, priority: form.priority, assignedTo: member.id, notes: form.notes });
@@ -2044,8 +2052,14 @@ Be precise and actionable.`;
                     {/* Assign task quick-button */}
                     <button onClick={() => setAssigningTo(m)}
                       title={`Assign task to ${m.name}`}
-                      className={`absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity ${ce.bg} ${ce.text}`}>
+                      className={`absolute right-9 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity ${ce.bg} ${ce.text}`}>
                       +
+                    </button>
+                    {/* Remove member button */}
+                    <button onClick={e => handleRemoveMember(m, e)}
+                      title={`Remove ${m.name}`}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-red-100 text-red-500 hover:bg-red-200">
+                      ×
                     </button>
                   </div>
                 );
