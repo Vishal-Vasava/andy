@@ -773,12 +773,135 @@ Be precise and actionable.`;
       );
     }
 
+    // ─── Voice utility ────────────────────────────────────────────────────────────
+    const Voice = (() => {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      let _voicesReady = false;
+      // Pre-load voice list (async in Chrome)
+      if (window.speechSynthesis) {
+        const load = () => { speechSynthesis.getVoices(); _voicesReady = true; };
+        speechSynthesis.onvoiceschanged = load;
+        load();
+      }
+      function pickFemaleVoice() {
+        const voices = speechSynthesis.getVoices();
+        return (
+          voices.find(v => /samantha|karen|victoria|moira|fiona|tessa|veena|zira|hazel|susan|catherine/i.test(v.name)) ||
+          voices.find(v => v.lang.startsWith('en') && /female/i.test(v.name)) ||
+          voices.find(v => v.lang.startsWith('en-')) ||
+          voices[0]
+        );
+      }
+      function speak(text, onEnd) {
+        if (!window.speechSynthesis) return onEnd && onEnd();
+        speechSynthesis.cancel();
+        const utt = new SpeechSynthesisUtterance(text);
+        utt.voice = pickFemaleVoice();
+        utt.rate  = 1.0;
+        utt.pitch = 1.15;
+        utt.volume = 1;
+        utt.onend = () => onEnd && onEnd();
+        utt.onerror = () => onEnd && onEnd();
+        speechSynthesis.speak(utt);
+      }
+      function listen(onResult, onError, onStart) {
+        if (!SR) { onError('Speech recognition not supported. Use Chrome or Edge.'); return null; }
+        const rec = new SR();
+        rec.lang = 'en-US';
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+        rec.onstart  = () => onStart && onStart();
+        rec.onresult = e => onResult(e.results[0][0].transcript.trim());
+        rec.onerror  = e => onError(e.error === 'no-speech' ? 'no-speech' : e.error);
+        rec.onend    = () => {};
+        rec.start();
+        return rec;
+      }
+      return { speak, listen, supported: !!SR };
+    })();
+
     // ─── Chat ─────────────────────────────────────────────────────────────────────
     function ChatPanel({ messages, input, onChange, onSend, onConfirm, onCancel, thinking }) {
-      const scrollRef = useRef(null);
+      const scrollRef     = useRef(null);
+      const recRef        = useRef(null);
+      const lastSpokenRef = useRef(0);
+      const voiceActiveRef = useRef(false);
+
+      const [voiceMode,  setVoiceMode]  = useState(false);
+      const [listening,  setListening]  = useState(false);
+      const [voiceError, setVoiceError] = useState('');
+
       useEffect(() => {
         if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }, [messages, thinking]);
+
+      const stopListening = () => {
+        if (recRef.current) { try { recRef.current.stop(); } catch (_) {} recRef.current = null; }
+        setListening(false);
+      };
+
+      const startListening = React.useCallback(() => {
+        setVoiceError('');
+        recRef.current = Voice.listen(
+          transcript => {
+            setListening(false);
+            recRef.current = null;
+            onChange(transcript);
+            // Small delay so state settles, then send
+            setTimeout(() => onSend(), 80);
+          },
+          err => {
+            setListening(false);
+            recRef.current = null;
+            if (err !== 'no-speech') setVoiceError(err);
+          },
+          () => setListening(true)
+        );
+      }, [onChange, onSend]);
+
+      // Speak new assistant messages when voice mode is on, then re-listen if Andy asked a question
+      useEffect(() => {
+        if (!voiceActiveRef.current || thinking) return;
+        if (messages.length <= lastSpokenRef.current) return;
+        const last = messages[messages.length - 1];
+        if (!last || last.role !== 'assistant') return;
+        lastSpokenRef.current = messages.length;
+
+        let text = '';
+        if (last.type === 'text')   text = last.content;
+        else if (last.type === 'result') text = last.content;
+        else if (last.type === 'action') text = `Got it. ${last.summary || 'Shall I go ahead?'}`;
+        if (!text) return;
+
+        Voice.speak(text, () => {
+          if (!voiceActiveRef.current) return;
+          // Re-listen only if Andy ended with a question
+          if (text.trim().endsWith('?') || text.includes('?')) {
+            startListening();
+          }
+        });
+      }, [messages, thinking, startListening]);
+
+      const toggleVoice = () => {
+        if (voiceMode) {
+          // Turn off
+          Voice.speak('', null); // cancel any speech
+          speechSynthesis && speechSynthesis.cancel();
+          stopListening();
+          voiceActiveRef.current = false;
+          setVoiceMode(false);
+          setVoiceError('');
+        } else {
+          if (!Voice.supported) {
+            setVoiceError('Not supported in this browser. Use Chrome or Edge.');
+            return;
+          }
+          voiceActiveRef.current = true;
+          lastSpokenRef.current = messages.length; // don't replay old messages
+          setVoiceMode(true);
+          Voice.speak('Hi, I\'m listening.', () => startListening());
+        }
+      };
 
       const handleKey = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); } };
 
@@ -838,11 +961,40 @@ Be precise and actionable.`;
             </div>
           )}
 
+          {/* Voice status bar */}
+          {voiceMode && (
+            <div className={`px-4 py-2 flex items-center gap-2 text-xs font-medium border-t border-gray-100 ${listening ? 'bg-red-50 text-red-600' : 'bg-indigo-50 text-indigo-600'}`}>
+              {listening
+                ? <><span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />Listening… speak now</>
+                : <><span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse inline-block" />Voice mode on — tap mic to speak</>
+              }
+              {voiceError && <span className="ml-auto text-red-500">{voiceError}</span>}
+            </div>
+          )}
+          {voiceError && !voiceMode && (
+            <div className="px-4 py-1.5 text-xs text-red-500 border-t border-red-100 bg-red-50">{voiceError}</div>
+          )}
+
           {/* Input bar */}
           <div className="px-4 py-3 flex gap-2 items-center">
+            {/* Mic button */}
+            <button
+              onClick={voiceMode && !thinking ? startListening : toggleVoice}
+              disabled={thinking}
+              title={voiceMode ? (listening ? 'Listening…' : 'Tap to speak') : 'Enable voice mode'}
+              className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all shrink-0 disabled:opacity-40 ${
+                listening
+                  ? 'bg-red-500 text-white shadow-lg shadow-red-200 animate-pulse'
+                  : voiceMode
+                    ? 'bg-indigo-100 text-indigo-600 hover:bg-indigo-200'
+                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}>
+              🎤
+            </button>
             <input
               value={input} onChange={e => onChange(e.target.value)} onKeyDown={handleKey}
-              placeholder="Ask Andy anything…" disabled={thinking}
+              placeholder={listening ? 'Listening…' : voiceMode ? 'Or type here…' : 'Ask Andy anything…'}
+              disabled={thinking}
               className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50"
             />
             <button onClick={onSend} disabled={thinking || !input.trim()}
