@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Andy — Sensei Agent Reference</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f8fafc;
+    color: #1e293b;
+    padding: 40px 24px;
+    line-height: 1.6;
+  }
+  .container { max-width: 860px; margin: 0 auto; }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 40px;
+    padding-bottom: 24px;
+    border-bottom: 2px solid #e0e7ff;
+  }
+  header img {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #4f46e5;
+  }
+  header h1 { font-size: 1.75rem; font-weight: 800; color: #1e1b4b; }
+  header p  { font-size: 0.875rem; color: #6366f1; font-weight: 500; margin-top: 2px; }
+
+  h2 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #1e1b4b;
+    margin: 36px 0 12px;
+    padding-left: 12px;
+    border-left: 4px solid #4f46e5;
+  }
+  h3 {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #4338ca;
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  p { font-size: 0.9375rem; color: #334155; margin-bottom: 10px; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    margin-bottom: 24px;
+    background: #fff;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  }
+  thead tr { background: #4f46e5; color: #fff; }
+  thead th { padding: 11px 14px; text-align: left; font-weight: 600; }
+  tbody tr:nth-child(even) { background: #f1f5f9; }
+  tbody td { padding: 10px 14px; color: #334155; vertical-align: top; }
+  tbody td:first-child { font-family: 'Courier New', monospace; font-weight: 600; color: #4f46e5; white-space: nowrap; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    margin-right: 4px;
+  }
+  .badge-purple { background: #ede9fe; color: #6d28d9; }
+  .badge-blue   { background: #dbeafe; color: #1d4ed8; }
+  .badge-green  { background: #d1fae5; color: #065f46; }
+  .badge-orange { background: #fef3c7; color: #92400e; }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e0e7ff;
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .card-title { font-weight: 700; color: #1e1b4b; margin-bottom: 6px; font-size: 0.9375rem; }
+  .card-body  { font-size: 0.875rem; color: #475569; }
+
+  .loop-diagram {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    background: #f1f5f9;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 20px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #4338ca;
+  }
+  .loop-step {
+    background: #fff;
+    border: 2px solid #818cf8;
+    border-radius: 8px;
+    padding: 6px 14px;
+    white-space: nowrap;
+  }
+  .loop-arrow { color: #818cf8; font-size: 1.1rem; }
+
+  .param-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 6px 16px;
+    font-size: 0.875rem;
+    margin-bottom: 20px;
+  }
+  .param-key   { font-weight: 600; color: #4338ca; padding: 4px 0; }
+  .param-value { color: #334155; padding: 4px 0; border-bottom: 1px solid #f1f5f9; }
+
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 600px) { .mode-grid { grid-template-columns: 1fr; } }
+
+  .mode-card {
+    background: #fff;
+    border: 1px solid #e0e7ff;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .mode-icon { font-size: 1.5rem; margin-bottom: 6px; }
+  .mode-label { font-weight: 700; color: #1e1b4b; font-size: 0.9rem; margin-bottom: 4px; }
+  .mode-desc  { font-size: 0.8125rem; color: #64748b; }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 20px;
+    border-top: 1px solid #e0e7ff;
+    font-size: 0.8125rem;
+    color: #94a3b8;
+    text-align: center;
+  }
+
+  code {
+    font-family: 'Courier New', monospace;
+    background: #f1f5f9;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #4f46e5;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <img src="Sensei.png" alt="Sensei" onerror="this.style.display='none'" />
+    <div>
+      <h1>Sensei Autonomous Agent</h1>
+      <p>Andy — Personal Life Assistant · Agent Reference</p>
+    </div>
+  </header>
+
+  <!-- Overview -->
+  <h2>Overview</h2>
+  <p>
+    Sensei is an autonomous ReAct-loop agent embedded in Andy. It acts as a habit coach, daily &amp; weekly planner,
+    execution reviewer, and mind coach. Unlike the regular Andy chat, Sensei reasons in multiple steps — calling
+    internal data tools before delivering structured advice — rather than answering in a single pass.
+  </p>
+
+  <!-- ReAct Loop -->
+  <h2>ReAct Loop Architecture</h2>
+  <div class="loop-diagram">
+    <div class="loop-step">think</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-step">tool</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-step">tool</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-step">… (up to 7 steps)</div>
+    <div class="loop-arrow">→</div>
+    <div class="loop-step">answer</div>
+  </div>
+
+  <div class="param-grid">
+    <div class="param-key">Max steps per run</div>
+    <div class="param-value">7</div>
+    <div class="param-key">Tokens per LLM call</div>
+    <div class="param-value">900</div>
+    <div class="param-key">Step types</div>
+    <div class="param-value"><code>think</code> · <code>tool</code> · <code>answer</code></div>
+    <div class="param-key">Loop logic</div>
+    <div class="param-value">Always starts with a think step; calls tools to pull live data before drawing conclusions; loop ends on answer</div>
+    <div class="param-key">Step JSON shape</div>
+    <div class="param-value"><code>{ step, thought, tool, args, sections[], summary }</code></div>
+    <div class="param-key">UI rendering</div>
+    <div class="param-value">Think/tool steps shown as collapsible reasoning bubbles; answer rendered as section cards with summary</div>
+    <div class="param-key">LLM backend</div>
+    <div class="param-value">SenseiAI (OpenAI-compatible <code>/v1/chat/completions</code>) or Claude fallback, configured in Settings</div>
+  </div>
+
+  <!-- Tools -->
+  <h2>Available Tools</h2>
+  <p>Sensei calls these tools during its reasoning loop to pull live data from the app's localStorage before making recommendations.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Tool name</th>
+        <th>What it returns</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>get_habits</td>
+        <td>All habits with name, frequency, current streak, longest streak, 7-day &amp; 30-day adherence rate, and last 14 log entries (date + done flag)</td>
+      </tr>
+      <tr>
+        <td>get_tasks</td>
+        <td>Open tasks (id, title, priority, due date, deferral count, category), overdue tasks, and chronically deferred tasks (deferred 2+ times)</td>
+      </tr>
+      <tr>
+        <td>get_deadlines</td>
+        <td>All active deadlines with title, due date, days left, category, status — sorted by urgency (soonest first)</td>
+      </tr>
+      <tr>
+        <td>get_mind_thoughts</td>
+        <td>Last 30 Mind tab entries with text content, emotion tag, and timestamp</td>
+      </tr>
+      <tr>
+        <td>get_execution_stats</td>
+        <td>Open task count, overdue count, chronically deferred count, average deferrals per task, and top 5 most-deferred tasks</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Modes -->
+  <h2>Quick Modes</h2>
+  <p>Pre-built one-click queries that trigger a full Sensei reasoning run with a specific focus.</p>
+
+  <div class="mode-grid">
+    <div class="mode-card">
+      <div class="mode-icon">🌅</div>
+      <div class="mode-label">Daily Review</div>
+      <div class="mode-desc">Checks habits, tasks due today, overdue items, and recent mind thoughts. Produces a practical plan for the day.</div>
+    </div>
+    <div class="mode-card">
+      <div class="mode-icon">📆</div>
+      <div class="mode-label">Week Plan</div>
+      <div class="mode-desc">Analyses deadlines, open tasks by priority, and habit momentum. Gives a clear focus and day-by-day guidance for the next 7 days.</div>
+    </div>
+    <div class="mode-card">
+      <div class="mode-icon">⚙️</div>
+      <div class="mode-label">Execution Review</div>
+      <div class="mode-desc">Diagnoses task completion rates, deferral habits, and overdue patterns. Explains why you might be stuck and gives specific fixes.</div>
+    </div>
+    <div class="mode-card">
+      <div class="mode-icon">🧘</div>
+      <div class="mode-label">Mind Coaching</div>
+      <div class="mode-desc">Analyses logged thoughts from the Mind tab. Identifies emotional patterns, recurring fears or themes, and helps you think more clearly.</div>
+    </div>
+  </div>
+
+  <!-- Personality -->
+  <h2>Personality &amp; Output Rules</h2>
+  <div class="card">
+    <div class="card-title">Tone</div>
+    <div class="card-body">Direct, warm, non-judgmental. References actual data it has seen (real habit names, task titles, deferred counts) — never generic advice.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Answer format</div>
+    <div class="card-body">Structured sections (icon + title + plain-text content). No markdown inside content fields. Ends with a 1–2 sentence summary.</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Constraint</div>
+    <div class="card-body">Only produces sections where it has real observations from data. Will not pad with generic advice when data is sparse.</div>
+  </div>
+
+  <!-- Image assets -->
+  <h2>UI Integration</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Location</th>
+        <th>Asset</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Sidebar nav icon</td>
+        <td><code>Sensei.png</code> (18×18, circular)</td>
+      </tr>
+      <tr>
+        <td>SenseiView header avatar</td>
+        <td><code>Sensei.png</code> (36×36, circular, indigo ring)</td>
+      </tr>
+      <tr>
+        <td>Empty state — no backend</td>
+        <td><code>Sensei.png</code> (64×64, circular, 60% opacity)</td>
+      </tr>
+      <tr>
+        <td>Empty state — ready</td>
+        <td><code>Sensei.png</code> (64×64, circular, 60% opacity)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ─────────────────────────────────────────────────── -->
+  <!-- Q&A: Why is Sensei an autonomous agent?            -->
+  <!-- ─────────────────────────────────────────────────── -->
+  <div style="margin-top:56px;padding-top:32px;border-top:2px solid #e0e7ff;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
+      <div style="background:#4f46e5;color:#fff;font-size:0.75rem;font-weight:700;padding:3px 12px;border-radius:999px;letter-spacing:0.05em;">Q &amp; A</div>
+      <span style="font-size:0.8125rem;color:#94a3b8;">Session notes</span>
+    </div>
+  </div>
+
+  <h2>Why is Sensei an autonomous agent?</h2>
+  <p>Most AI features in Andy work as a single call: <strong>You ask → LLM answers → done.</strong> Sensei is different — it decides for itself what information it needs before answering.</p>
+
+  <div class="card">
+    <div class="card-title">Regular Andy chat (single-pass)</div>
+    <div class="card-body">You ask → LLM answers in one call. No data lookup, no reasoning steps.</div>
+  </div>
+  <div class="card" style="border-color:#c7d2fe;">
+    <div class="card-title">Sensei (autonomous ReAct loop)</div>
+    <div class="card-body">
+      You press "Daily Review" →
+      Sensei <strong>thinks</strong> ("I need habit + task data first") →
+      calls <code>get_habits</code> →
+      calls <code>get_execution_stats</code> →
+      calls <code>get_mind_thoughts</code> →
+      only then <strong>answers</strong> with advice grounded in your real data.
+    </div>
+  </div>
+
+  <h3>Properties that qualify it as autonomous</h3>
+  <table>
+    <thead><tr><th>Property</th><th>What it means in Sensei</th></tr></thead>
+    <tbody>
+      <tr><td>Tool use</td><td>Can call functions to fetch live data — not just talk</td></tr>
+      <tr><td>Self-directed</td><td>Decides which tools to call and in what order, based on its own reasoning</td></tr>
+      <tr><td>Multi-step</td><td>Up to 7 steps per run; each step informs the next</td></tr>
+      <tr><td>Goal-driven</td><td>Given a goal ("do a daily review") and figures out the path itself</td></tr>
+      <tr><td>No scripted path</td><td>Sequence of tool calls is not hardcoded — the LLM chooses them at runtime</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:0.875rem;color:#64748b;">The technical pattern is called <strong>ReAct</strong> (Reasoning + Acting). Compare to regular Andy chat: you say "add a task" and it adds a task. Sensei is never told <em>how</em> to do a review — it works that out on its own each time.</p>
+
+  <!-- ─────────────────────────────────────────────────── -->
+  <!-- Q&A: Andy as a Day/Week/Month Planner Agent        -->
+  <!-- ─────────────────────────────────────────────────── -->
+
+  <h2>Andy as a Day / Week / Month Planner Agent</h2>
+  <p>Andy can use the same ReAct pattern as Sensei, but focused on generating a <strong>structured plan</strong> (not just coaching advice). Andy would decide what data to pull, then produce a concrete schedule.</p>
+
+  <h3>New tools needed</h3>
+  <table>
+    <thead><tr><th>Tool</th><th>What it fetches</th></tr></thead>
+    <tbody>
+      <tr><td>get_calendar_slots</td><td>Free/busy blocks from a stored weekly schedule</td></tr>
+      <tr><td>get_priorities</td><td>P0/P1 tasks + deadlines due within the planning window</td></tr>
+      <tr><td>get_habits_due</td><td>Which habits are scheduled for which days of the week</td></tr>
+      <tr><td>get_energy_pattern</td><td>User's logged energy levels by time of day (if tracked)</td></tr>
+      <tr><td>get_family_commitments</td><td>Events/responsibilities from the Family tab</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:0.875rem;color:#64748b;">Most of these already exist via <code>get_tasks</code>, <code>get_deadlines</code>, <code>get_habits</code> — so the tool lift is small.</p>
+
+  <h3>Three planning modes</h3>
+  <table>
+    <thead><tr><th>Mode</th><th>Window</th><th>Output</th></tr></thead>
+    <tbody>
+      <tr><td>📅 Day Plan</td><td>Today</td><td>Hour-by-hour block schedule, top 3 focus tasks, habit reminders</td></tr>
+      <tr><td>📆 Week Plan</td><td>Next 7 days</td><td>Day-by-day priorities, deadline countdowns, habit momentum targets</td></tr>
+      <tr><td>🗓 Month Plan</td><td>Next 30 days</td><td>Big rocks (P0 deadlines), habit streaks to build, weekly themes</td></tr>
+    </tbody>
+  </table>
+
+  <h3>How the agent would reason</h3>
+  <div class="loop-diagram" style="flex-direction:column;align-items:flex-start;gap:6px;font-size:0.8125rem;">
+    <div><span class="loop-step">think</span> &nbsp;→ what does the user's week look like?</div>
+    <div><span class="loop-step">tool</span> &nbsp;&nbsp;→ get_deadlines (sorted by urgency)</div>
+    <div><span class="loop-step">tool</span> &nbsp;&nbsp;→ get_tasks (P0 + P1 only)</div>
+    <div><span class="loop-step">tool</span> &nbsp;&nbsp;→ get_habits_due (which days need which habits)</div>
+    <div><span class="loop-step">tool</span> &nbsp;&nbsp;→ get_family_commitments</div>
+    <div><span class="loop-step">think</span> &nbsp;→ how do I distribute load across days?</div>
+    <div><span class="loop-step">answer</span> → structured day-by-day plan</div>
+  </div>
+
+  <h3>What makes it genuinely autonomous vs. just a prompt</h3>
+  <div class="card"><div class="card-title">Load distribution</div><div class="card-body">Doesn't just list tasks — assigns them to days based on urgency and volume.</div></div>
+  <div class="card"><div class="card-title">Overload detection</div><div class="card-body">If Tuesday already has a deadline + 5 tasks, it moves lower-priority work to Wednesday.</div></div>
+  <div class="card"><div class="card-title">Habit cadence respect</div><div class="card-body">Won't schedule a hard focus block on a habit-heavy morning.</div></div>
+  <div class="card"><div class="card-title">Adaptive window</div><div class="card-body">If you ask for a week plan but have a P0 deadline in 2 days, it front-loads accordingly.</div></div>
+
+  <h3>Where it would live — two options</h3>
+  <table>
+    <thead><tr><th>Option</th><th>Approach</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr><td>Option 1</td><td>Add 📅 Day Plan, 📆 Week Plan, 🗓 Month Plan as new quick modes inside Sensei</td><td>Less work, planning stays next to coaching — natural fit</td></tr>
+      <tr><td>Option 2</td><td>Separate "Planner" tab with calendar-style output and saveable/pinnable plans</td><td>Cleaner UX if planning becomes a daily habit — more build effort</td></tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Generated from Andy session · <strong>Sensei agent</strong> · <code>index.html</code> lines 3915–4040 · sw.js <code>andy-v8</code>
+  </footer>
+
+</div>
+</body>
+</html>
