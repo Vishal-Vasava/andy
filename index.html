@@ -4249,7 +4249,6 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
       const [steps, setSteps]     = React.useState([]);
       const [running, setRunning] = React.useState(false);
       const [done, setDone]       = React.useState(false);
-      const [input, setInput]     = React.useState('');
       const [answer, setAnswer]   = React.useState(null);
       const bottomRef             = React.useRef(null);
 
@@ -4261,7 +4260,6 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
         setAnswer(null);
         setDone(false);
         setRunning(true);
-        setInput('');
         await runSenseiAgent(query.trim(), step => {
           setSteps(prev => [...prev, step]);
           if (step.step === 'answer') {
@@ -4272,8 +4270,6 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
         });
         setRunning(false);
       };
-
-      const handleKey = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(input); } };
 
       const hasBackend = !!(window.storage.get('settings:endpoint_url') || window.storage.get('settings:api_key'));
 
@@ -4314,7 +4310,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
               <div className="text-center py-16 text-gray-400 text-sm">
                 <img src="Sensei.png" alt="Sensei" className="w-16 h-16 rounded-full object-cover mx-auto mb-3 opacity-60" />
                 <p className="font-medium text-gray-600 mb-1">Ready when you are</p>
-                <p>Pick a mode above or ask anything below.</p>
+                <p>Pick a mode above to get started.</p>
               </div>
             )}
 
@@ -4339,16 +4335,6 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
             <div ref={bottomRef} />
           </div>
 
-          {/* Input */}
-          <div className="px-4 py-3 border-t border-gray-200 bg-white flex gap-2 items-center shrink-0">
-            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
-              placeholder="Ask Sensei anything…" disabled={running}
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50" />
-            <button onClick={() => run(input)} disabled={running || !input.trim()}
-              className="bg-indigo-950 hover:bg-indigo-800 disabled:opacity-40 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0">
-              Ask
-            </button>
-          </div>
         </div>
       );
     }
