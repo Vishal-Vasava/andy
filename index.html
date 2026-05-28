@@ -4249,6 +4249,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
       const [steps, setSteps]     = React.useState([]);
       const [running, setRunning] = React.useState(false);
       const [done, setDone]       = React.useState(false);
+      const [input, setInput]     = React.useState('');
       const [answer, setAnswer]   = React.useState(null);
       const bottomRef             = React.useRef(null);
 
@@ -4260,6 +4261,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
         setAnswer(null);
         setDone(false);
         setRunning(true);
+        setInput('');
         await runSenseiAgent(query.trim(), step => {
           setSteps(prev => [...prev, step]);
           if (step.step === 'answer') {
@@ -4270,6 +4272,8 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
         });
         setRunning(false);
       };
+
+      const handleKey = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); run(input); } };
 
       const hasBackend = !!(window.storage.get('settings:endpoint_url') || window.storage.get('settings:api_key'));
 
@@ -4333,6 +4337,17 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
             {done && answer && <SenseiAnswer sections={answer.sections} summary={answer.summary} />}
 
             <div ref={bottomRef} />
+          </div>
+
+          {/* Ask Sensei input */}
+          <div className="px-4 py-3 border-t border-gray-200 bg-white flex gap-2 items-center shrink-0">
+            <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey}
+              placeholder="Ask Sensei anything…" disabled={running}
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50" />
+            <button onClick={() => run(input)} disabled={running || !input.trim()}
+              className="bg-indigo-950 hover:bg-indigo-800 disabled:opacity-40 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors shrink-0">
+              Ask Sensei
+            </button>
           </div>
 
         </div>
@@ -5521,15 +5536,17 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
               <main className="flex-1 overflow-y-auto">
                 {renderSection()}
               </main>
-              <ChatPanel
-                messages={state.messages}
-                input={state.chatInput}
-                onChange={v => dispatch({ type:'CHAT_INPUT', payload:v })}
-                onSend={handleSend}
-                onConfirm={handleConfirm}
-                onCancel={handleCancel}
-                thinking={state.thinking}
-              />
+              {state.section !== 'sensei' && (
+                <ChatPanel
+                  messages={state.messages}
+                  input={state.chatInput}
+                  onChange={v => dispatch({ type:'CHAT_INPUT', payload:v })}
+                  onSend={handleSend}
+                  onConfirm={handleConfirm}
+                  onCancel={handleCancel}
+                  thinking={state.thinking}
+                />
+              )}
             </div>
           </div>
         </>
