@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Andy — Personal Life Assistant</title>
+  <title>SenseiAI — Personal Life Assistant Coach</title>
   <!-- PWA -->
   <link rel="manifest" href="manifest.json" />
   <meta name="theme-color" content="#4f46e5" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Andy" />
+  <meta name="apple-mobile-web-app-title" content="SenseiAI" />
   <link rel="apple-touch-icon" href="andy1-192.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="andy1-192.png" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -72,6 +72,10 @@
         return result;
       },
     };
+
+    // ─── App identity helpers ─────────────────────────────────────────────────────
+    const getAppName    = () => window.storage.get('settings:app_name')    || 'SenseiAI';
+    const getAppTagline = () => window.storage.get('settings:app_tagline') || 'Personal Life Assistant Coach';
 
     // ─── Theme system ─────────────────────────────────────────────────────────────
     const THEMES = {
@@ -637,8 +641,8 @@ Be precise and actionable.`;
           <div className="px-5 py-4 border-b border-indigo-800 flex items-center gap-3">
             <img src="andy2.png" alt="Andy" className="w-10 h-10 rounded-full object-cover shrink-0 ring-2 ring-indigo-700" />
             <div>
-              <div className="text-xl font-bold text-white tracking-tight">Andy</div>
-              <div className="text-indigo-400 text-[11px] mt-0.5">Personal Life Assistant</div>
+              <div className="text-xl font-bold text-white tracking-tight">{getAppName()}</div>
+              <div className="text-indigo-400 text-[11px] mt-0.5">{getAppTagline()}</div>
             </div>
           </div>
 
@@ -955,7 +959,7 @@ Be precise and actionable.`;
                       {m.role === 'assistant' && (
                         <div className="flex items-center gap-1.5 mb-1 ml-1">
                           <img src="andy2.png" alt="Andy" className="w-5 h-5 rounded-full object-cover" />
-                          <span className="text-[11px] text-indigo-500 font-semibold">Andy</span>
+                          <span className="text-[11px] text-indigo-500 font-semibold">{getAppName()}</span>
                         </div>
                       )}
                       <div className={`px-3 py-2.5 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed ${
@@ -1015,7 +1019,7 @@ Be precise and actionable.`;
             </button>
             <input
               value={input} onChange={e => onChange(e.target.value)} onKeyDown={handleKey}
-              placeholder={listening ? 'Listening…' : voiceMode ? 'Or type here…' : 'Ask Andy anything…'}
+              placeholder={listening ? 'Listening…' : voiceMode ? 'Or type here…' : `Ask ${getAppName()} anything…`}
               disabled={thinking}
               className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50"
             />
@@ -1212,7 +1216,7 @@ Be precise and actionable.`;
       return (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">🧠 Andy's Weekly Insights</h3>
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">🧠 {getAppName()}'s Weekly Insights</h3>
             <button onClick={onRunAnalysis} className="text-xs text-indigo-500 hover:text-indigo-700">Refresh →</button>
           </div>
           {insights.map((ins, i) => (
@@ -1285,7 +1289,7 @@ Be precise and actionable.`;
           </div>
 
           {tasks.length === 0 && deadlines.length === 0 && habits.length === 0 && (
-            <EmptyState icon="👋" text="Welcome to Andy! Use the chat below or the sidebar to get started." />
+            <EmptyState icon="👋" text={`Welcome to ${getAppName()}! Use the chat below or the sidebar to get started.`} />
           )}
         </div>
       );
@@ -1309,7 +1313,7 @@ Be precise and actionable.`;
             {loading ? (
               <div className="flex flex-col items-center gap-3 py-10 text-gray-500">
                 <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                <span className="text-sm">Andy is preparing your brief…</span>
+                <span className="text-sm">{getAppName()} is preparing your brief…</span>
               </div>
             ) : briefing ? (
               <>
@@ -1356,7 +1360,7 @@ Be precise and actionable.`;
             {loading ? (
               <div className="flex flex-col items-center gap-3 py-10 text-gray-500">
                 <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                <span className="text-sm">Andy is reviewing your day…</span>
+                <span className="text-sm">{getAppName()} is reviewing your day…</span>
               </div>
             ) : digest ? (
               <>
@@ -3232,6 +3236,8 @@ Be precise and actionable.`;
       const [endpointUrl, setEndpointUrl] = useState(window.storage.get('settings:endpoint_url') || '');
       const [modelName, setModelName]     = useState(window.storage.get('settings:model') || '');
       const [name, setName]               = useState(window.storage.get('settings:user_name') || '');
+      const [appName, setAppName]         = useState(window.storage.get('settings:app_name')    || 'SenseiAI');
+      const [appTagline, setAppTagline]   = useState(window.storage.get('settings:app_tagline') || 'Personal Life Assistant Coach');
 
       // Timings
       const [wakeTime, setWakeTime]     = useState(window.storage.get('settings:wake_time')     || '07:00');
@@ -3272,6 +3278,8 @@ Be precise and actionable.`;
         window.storage.set('settings:endpoint_url',       endpointUrl.trim());
         window.storage.set('settings:model',              modelName.trim());
         window.storage.set('settings:user_name',          name.trim());
+        window.storage.set('settings:app_name',           appName.trim()    || 'SenseiAI');
+        window.storage.set('settings:app_tagline',        appTagline.trim() || 'Personal Life Assistant Coach');
         window.storage.set('settings:wake_time',          wakeTime);
         window.storage.set('settings:briefing_time',      briefTime);
         window.storage.set('settings:digest_time',        digestTime);
@@ -3346,6 +3354,15 @@ Be precise and actionable.`;
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-800">Profile</h3>
                 <Input label="Your name" placeholder="e.g. Alex" value={name} onChange={e => setName(e.target.value)} />
+
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">App Identity</p>
+                  <div className="space-y-3">
+                    <Input label="App name" placeholder="SenseiAI" value={appName} onChange={e => setAppName(e.target.value)} />
+                    <Input label="Tagline" placeholder="Personal Life Assistant Coach" value={appTagline} onChange={e => setAppTagline(e.target.value)} />
+                    <p className="text-xs text-gray-400">Changes take effect after saving. The sidebar and all UI labels will update.</p>
+                  </div>
+                </div>
 
                 {/* Quick-connect buttons */}
                 <div>
@@ -3435,7 +3452,7 @@ Be precise and actionable.`;
 
             {tab === 'behavior' && (
               <div className="space-y-5">
-                <h3 className="font-semibold text-gray-800">Andy's Behavior</h3>
+                <h3 className="font-semibold text-gray-800">{getAppName()}'s Behavior</h3>
                 <div>
                   <p className="text-xs text-gray-500 mb-2">Response style</p>
                   <div className="space-y-2">
@@ -3546,7 +3563,7 @@ Be precise and actionable.`;
             {tab === 'data' && (
               <div className="space-y-4">
                 <h3 className="font-semibold text-gray-800">Data</h3>
-                <p className="text-xs text-gray-500">All Andy data is stored locally in your browser's localStorage.</p>
+                <p className="text-xs text-gray-500">All {getAppName()} data is stored locally in your browser's localStorage.</p>
                 <Card className="p-4 space-y-4">
                   <div>
                     <div className="font-medium text-gray-800 text-sm mb-1">Export backup</div>
@@ -3563,7 +3580,7 @@ Be precise and actionable.`;
                   <div>
                     <div className="font-medium text-gray-800 text-sm mb-1">Clear all data</div>
                     <p className="text-xs text-gray-400 mb-2">Permanently delete all tasks, habits, deadlines, and settings.</p>
-                    <Btn variant="danger" onClick={() => { if (confirm('Delete all Andy data? This cannot be undone.')) { window.storage.clear(); window.location.reload(); } }}>🗑️ Clear All Data</Btn>
+                    <Btn variant="danger" onClick={() => { if (confirm(`Delete all ${getAppName()} data? This cannot be undone.`)) { window.storage.clear(); window.location.reload(); } }}>🗑️ Clear All Data</Btn>
                   </div>
                 </Card>
               </div>
@@ -5162,7 +5179,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
                 <div className="space-y-4">
                   <div className="text-center mb-5">
                     <img src="andy2.png" alt="Andy" className="w-24 h-24 rounded-full object-cover mx-auto mb-3 ring-4 ring-indigo-100 shadow-md" />
-                    <h1 className="text-2xl font-bold text-gray-900">Meet Andy</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">Meet {getAppName()}</h1>
                     <p className="text-gray-500 mt-2 text-sm leading-relaxed">Your personal AI life assistant — tasks, habits, deadlines, family, medications and more.</p>
                   </div>
                   <Input label="What's your name?" placeholder="e.g. Alex" value={name} onChange={e => setName(e.target.value)} />
@@ -5257,7 +5274,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
                 <div className="text-center py-2 space-y-3">
                   <div className="text-5xl mb-2">🎉</div>
                   <h2 className="text-2xl font-bold text-gray-900">You're all set{name ? `, ${name}` : ''}!</h2>
-                  <p className="text-gray-500 text-sm leading-relaxed">Andy is ready to help. Start by chatting below, or explore any section in the sidebar.</p>
+                  <p className="text-gray-500 text-sm leading-relaxed">{getAppName()} is ready to help. Start by chatting below, or explore any section in the sidebar.</p>
                   {family.length > 0 && <p className="text-sm text-gray-500">Added {family.length} family member{family.length !== 1 ? 's' : ''}.</p>}
                   {parsedItem && <p className="text-sm text-gray-500">Created your first {parsedItem.type}: <span className="font-medium text-gray-700">"{parsedItem.title}"</span></p>}
                 </div>
@@ -5275,7 +5292,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
                 )}
                 {step === 5 && (
                   <button onClick={finish} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-semibold transition-colors">
-                    Open Andy →
+                    Open {getAppName()} →
                   </button>
                 )}
               </div>
@@ -5878,7 +5895,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
                   <span className="text-lg shrink-0">🌙</span>
                   <div className="flex-1 min-w-0">
                     <span className="font-semibold text-white">Evening digest ready</span>
-                    <span className="text-indigo-300"> — Andy has reviewed your day</span>
+                    <span className="text-indigo-300"> — {getAppName()} has reviewed your day</span>
                   </div>
                   <button onClick={generateDigest}
                     className="shrink-0 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
@@ -5896,7 +5913,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
                 <div className="mx-4 mt-3 flex items-center gap-3 bg-indigo-600 rounded-xl px-4 py-3 text-sm" style={{animation:'slideIn 0.25s ease-out'}}>
                   <span className="text-xl shrink-0">📲</span>
                   <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-white">Install Andy as an app</span>
+                    <span className="font-semibold text-white">Install {getAppName()} as an app</span>
                     <span className="text-indigo-200"> — works offline, lives on your taskbar</span>
                   </div>
                   <button onClick={async () => {

@@ -1,7 +1,7 @@
 {
-  "name": "Andy — Personal Life Assistant",
-  "short_name": "Andy",
-  "description": "Your agentic personal life assistant for tasks, habits, deadlines and more",
+  "name": "SenseiAI — Personal Life Assistant Coach",
+  "short_name": "SenseiAI",
+  "description": "Your agentic personal life assistant coach for tasks, habits, deadlines and more",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

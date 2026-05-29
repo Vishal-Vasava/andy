@@ -1,4 +1,4 @@
-const CACHE = 'andy-v8';
+const CACHE = 'andy-v9';
 const LOCAL_ASSETS = [
   '/',
   '/index.html',
