@@ -2365,14 +2365,17 @@ Be precise and actionable.`;
     }
 
     // Add Habit Modal
-    function AddHabitModal({ onSave, onClose }) {
-      const [form, setForm] = useState({ name:'', frequency:'daily', category:'health', targetDays:66 });
+    function AddHabitModal({ onSave, onClose, initial = null }) {
+      const [form, setForm] = useState(initial
+        ? { name: initial.name, frequency: initial.frequency || 'daily', category: initial.category || 'health', targetDays: initial.targetDays || 66 }
+        : { name:'', frequency:'daily', category:'health', targetDays:66 });
       const f = v => setForm(p => ({ ...p, ...v }));
+      const isEdit = !!initial;
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4 relative">
             <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-xl">×</button>
-            <h2 className="text-lg font-bold text-gray-800">Add Habit</h2>
+            <h2 className="text-lg font-bold text-gray-800">{isEdit ? 'Edit Habit' : 'Add Habit'}</h2>
 
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Habit Name *</label>
@@ -2408,7 +2411,7 @@ Be precise and actionable.`;
             <div className="flex gap-2 pt-1">
               <button onClick={() => form.name.trim() && onSave(form)} disabled={!form.name.trim()}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white text-sm font-medium py-2.5 rounded-xl transition-colors">
-                Start Tracking
+                {isEdit ? 'Save Changes' : 'Start Tracking'}
               </button>
               <button onClick={onClose} className="px-5 py-2.5 text-sm text-gray-500 hover:bg-gray-50 rounded-xl transition-colors">Cancel</button>
             </div>
@@ -2419,8 +2422,9 @@ Be precise and actionable.`;
 
     // ─── Habit Matrix (shared by HabitsView + PersonaView) ───────────────────────
     function HabitMatrix({ memberId = null, onRefresh }) {
-      const [showAdd, setShowAdd] = useState(false);
-      const [tick, setTick]       = useState(0);
+      const [showAdd,      setShowAdd]      = useState(false);
+      const [editingHabit, setEditingHabit] = useState(null);
+      const [tick, setTick]                 = useState(0);
       const refresh = () => { setTick(t => t + 1); onRefresh && onRefresh(); };
 
       const today  = DS.todayISO();
@@ -2458,6 +2462,11 @@ Be precise and actionable.`;
         setShowAdd(false); refresh();
       };
 
+      const handleEdit = form => {
+        DS.habits.update(editingHabit.id, { name: form.name, frequency: form.frequency, category: form.category, targetDays: form.targetDays });
+        setEditingHabit(null); refresh();
+      };
+
       const DAY_NAMES = ['Su','Mo','Tu','We','Th','Fr','Sa'];
       const catColors = { health:'bg-rose-100 text-rose-600', fitness:'bg-orange-100 text-orange-600', learning:'bg-blue-100 text-blue-600', finance:'bg-emerald-100 text-emerald-600', mindfulness:'bg-violet-100 text-violet-600', other:'bg-gray-100 text-gray-500' };
 
@@ -2465,7 +2474,8 @@ Be precise and actionable.`;
 
       return (
         <div className="flex flex-col h-full">
-          {showAdd && <AddHabitModal onSave={handleAdd} onClose={() => setShowAdd(false)} />}
+          {showAdd      && <AddHabitModal onSave={handleAdd} onClose={() => setShowAdd(false)} />}
+          {editingHabit && <AddHabitModal onSave={handleEdit} onClose={() => setEditingHabit(null)} initial={editingHabit} />}
 
           {/* Header */}
           <div className="px-5 py-3 flex items-center justify-between bg-white border-b border-gray-100 shrink-0">
@@ -2550,12 +2560,20 @@ Be precise and actionable.`;
                             {streak > 0 ? `🔥${streak}` : '–'}
                           </span>
                         </td>
-                        {/* Delete */}
+                        {/* Edit + Delete */}
                         <td className="text-center px-1 py-2">
-                          <button onClick={() => { DS.habits.delete(h.id); refresh(); }}
-                            className="w-6 h-6 flex items-center justify-center rounded-full text-gray-200 hover:text-red-400 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all text-sm mx-auto">
-                            ✕
-                          </button>
+                          <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                            <button onClick={() => setEditingHabit(h)}
+                              title="Edit habit"
+                              className="w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 text-xs">
+                              ✏️
+                            </button>
+                            <button onClick={() => { DS.habits.delete(h.id); refresh(); }}
+                              title="Delete habit"
+                              className="w-6 h-6 flex items-center justify-center rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 text-sm">
+                              ✕
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
