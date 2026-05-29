@@ -630,7 +630,8 @@ Be precise and actionable.`;
     }
 
     // ─── Sidebar ─────────────────────────────────────────────────────────────────
-    function Sidebar({ section, onNav, open }) {
+    function Sidebar({ section, onNav, open, onPersona }) {
+      const members = DS.family.list();
       return (
         <aside className={`${open ? 'w-52' : 'w-0 overflow-hidden'} transition-all duration-200 bg-indigo-950 flex flex-col shrink-0 select-none`}>
           <div className="px-5 py-4 border-b border-indigo-800 flex items-center gap-3">
@@ -640,6 +641,26 @@ Be precise and actionable.`;
               <div className="text-indigo-400 text-[11px] mt-0.5">Personal Life Assistant</div>
             </div>
           </div>
+
+          {/* Family persona switcher */}
+          {members.length > 0 && (
+            <div className="px-4 py-2.5 border-b border-indigo-800">
+              <div className="text-[10px] text-indigo-500 font-semibold uppercase tracking-wider mb-2">Switch to</div>
+              <div className="flex flex-wrap gap-2">
+                {members.map((m, i) => {
+                  const ce = FAMILY_COLORS[i % FAMILY_COLORS.length];
+                  return (
+                    <button key={m.id} onClick={() => onPersona(m)}
+                      title={`Switch to ${m.name}'s view`}
+                      className={`w-8 h-8 rounded-full ${ce.bg} ${ce.text} flex items-center justify-center text-sm font-bold hover:ring-2 hover:ring-white transition-all`}>
+                      {m.name[0]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <nav className="flex-1 py-2 overflow-y-auto">
             {NAV.map(n => (
               <button key={n.id} onClick={() => onNav(n.id)}
@@ -3612,13 +3633,13 @@ Be precise and actionable.`;
       );
     }
 
-    function MindView({ tick }) {
+    function MindView({ tick, storageKey = 'mind:thoughts' }) {
       const [input, setInput]         = useState('');
-      const [thoughts, setThoughts]   = useState(() => window.storage.get('mind:thoughts') || []);
+      const [thoughts, setThoughts]   = useState(() => window.storage.get(storageKey) || []);
       const [showCloud, setShowCloud] = useState(false);
       const [analyzing, setAnalyzing] = useState(null);
 
-      const saveThoughts = list => { window.storage.set('mind:thoughts', list); };
+      const saveThoughts = list => { window.storage.set(storageKey, list); };
 
       const analyzeThought = async (thought, list) => {
         if (!window.storage.get('settings:endpoint_url') && !window.storage.get('settings:api_key')) {
@@ -3772,9 +3793,9 @@ Now classify this thought:`,
       { bg: '#ffffff', border: '#d1d5db', label: 'White' },
     ];
 
-    function VisionBoardView() {
+    function VisionBoardView({ storageKey = 'vision:items' }) {
       const [items, setItems]         = React.useState(() => {
-        try { return JSON.parse(window.storage.get('vision:items') || '[]'); } catch { return []; }
+        try { return JSON.parse(window.storage.get(storageKey) || '[]'); } catch { return []; }
       });
       const [drag, setDrag]           = React.useState(null);
       const [resize, setResize]       = React.useState(null);
@@ -3815,13 +3836,13 @@ Now classify this thought:`,
         // Base64 photos can be several MB each — localStorage limit is ~5 MB total.
         // Try to save everything; if quota exceeded, save text cards only so they survive.
         try {
-          window.storage.set('vision:items', JSON.stringify(items));
+          window.storage.set(storageKey, JSON.stringify(items));
         } catch (_) {
           try {
-            window.storage.set('vision:items', JSON.stringify(items.filter(i => i.type !== 'photo')));
+            window.storage.set(storageKey, JSON.stringify(items.filter(i => i.type !== 'photo')));
           } catch (_2) { /* even text-only is too large — skip */ }
         }
-      }, [items]);
+      }, [items, storageKey]);
 
       // ── Reposition drag ──────────────────────────────────────────────────────────
       function onItemMouseDown(e, id) {
@@ -5257,6 +5278,147 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
       }
     }
 
+    // ─── Persona Views ────────────────────────────────────────────────────────────
+    const PRIORITY_COLORS = { P0:'bg-red-100 text-red-700', P1:'bg-orange-100 text-orange-700', P2:'bg-blue-100 text-blue-700', P3:'bg-gray-100 text-gray-600' };
+
+    function PersonaTasks({ member }) {
+      const [tick, setTick]     = useState(0);
+      const [showAdd, setShowAdd] = useState(false);
+      const [form, setForm]     = useState({ title: '', priority: 'P2', dueDate: '' });
+      const refresh = () => setTick(t => t + 1);
+
+      const open = DS.tasks.list().filter(t => t.assignedTo === member.id && !t.completedAt)
+        .sort((a, b) => a.priority < b.priority ? -1 : 1);
+      const done = DS.tasks.list().filter(t => t.assignedTo === member.id && !!t.completedAt).slice(0, 5);
+
+      const addTask = () => {
+        if (!form.title.trim()) return;
+        DS.tasks.create({ title: form.title.trim(), priority: form.priority, dueDate: form.dueDate || null, assignedTo: member.id });
+        setForm({ title: '', priority: 'P2', dueDate: '' });
+        setShowAdd(false);
+        refresh();
+      };
+
+      const complete = id => {
+        DS.tasks.complete(id);
+        DS.family.updateTaskStatus(member.id, id, 'done');
+        refresh();
+      };
+
+      return (
+        <div className="flex flex-col h-full">
+          <div className="px-4 py-3 flex items-center justify-between border-b border-gray-100 bg-white shrink-0">
+            <span className="text-sm text-gray-500">{open.length} open task{open.length !== 1 ? 's' : ''}</span>
+            <button onClick={() => setShowAdd(v => !v)}
+              className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 transition-colors">+ Add Task</button>
+          </div>
+
+          {showAdd && (
+            <div className="bg-white border-b border-gray-100 px-4 py-3 flex flex-col gap-2 shrink-0">
+              <input autoFocus value={form.title} onChange={e => setForm({ ...form, title: e.target.value })}
+                onKeyDown={e => e.key === 'Enter' && addTask()}
+                placeholder="Task title…"
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <div className="flex gap-2">
+                <select value={form.priority} onChange={e => setForm({ ...form, priority: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs flex-1 focus:outline-none">
+                  {['P0','P1','P2','P3'].map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs flex-1 focus:outline-none" />
+                <button onClick={addTask} className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-lg hover:bg-indigo-700">Add</button>
+                <button onClick={() => setShowAdd(false)} className="text-gray-400 text-xs px-2 hover:text-gray-600">Cancel</button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {open.length === 0 && !showAdd && (
+              <div className="text-center py-14 text-gray-400 text-sm">No open tasks — add one above!</div>
+            )}
+            {open.map(t => (
+              <div key={t.id} className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-start gap-3 shadow-sm">
+                <button onClick={() => complete(t.id)}
+                  className="w-5 h-5 rounded-full border-2 border-gray-300 hover:border-indigo-500 hover:bg-indigo-50 shrink-0 mt-0.5 transition-colors" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-800 truncate">{t.title}</div>
+                  {t.dueDate && <div className="text-xs text-gray-400 mt-0.5">Due {t.dueDate}</div>}
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${PRIORITY_COLORS[t.priority] || PRIORITY_COLORS.P2}`}>{t.priority}</span>
+              </div>
+            ))}
+
+            {done.length > 0 && (
+              <>
+                <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-4 pb-1">Recently done</div>
+                {done.map(t => (
+                  <div key={t.id} className="bg-gray-50 rounded-xl px-4 py-2.5 flex items-center gap-3 opacity-60">
+                    <span className="text-emerald-500 text-sm">✓</span>
+                    <span className="text-sm text-gray-500 line-through truncate flex-1">{t.title}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function PersonaView({ member, onBack }) {
+      const [tab, setTab] = useState('tasks');
+      const TABS = [
+        { id: 'tasks',  label: 'My Tasks',    icon: '✅' },
+        { id: 'vision', label: 'Vision Board', icon: '🌟' },
+        { id: 'mind',   label: 'Mind',         icon: '🧠' },
+      ];
+      const visionKey = `vision:items:${member.id}`;
+      const mindKey   = `mind:thoughts:${member.id}`;
+
+      const ce = (() => {
+        const all = DS.family.list();
+        const idx = all.findIndex(m => m.id === member.id);
+        return FAMILY_COLORS[(idx >= 0 ? idx : 0) % FAMILY_COLORS.length];
+      })();
+
+      return (
+        <div className="flex flex-col h-screen bg-gray-50">
+          {/* Header */}
+          <div className="bg-indigo-950 px-5 py-4 flex items-center gap-4 shrink-0">
+            <button onClick={onBack}
+              className="text-indigo-400 hover:text-white text-xl leading-none transition-colors" title="Back to Andy">
+              ←
+            </button>
+            <div className={`w-10 h-10 rounded-full ${ce.bg} flex items-center justify-center font-bold text-lg ${ce.text} shrink-0`}>
+              {member.name[0]}
+            </div>
+            <div>
+              <div className="text-white font-bold text-lg leading-tight">{member.name}</div>
+              <div className="text-indigo-400 text-xs capitalize">{member.relationship}{member.age ? ` · ${member.age}y` : ''}</div>
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="bg-white border-b border-gray-200 flex shrink-0">
+            {TABS.map(t => (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 border-b-2 transition-colors ${
+                  tab === t.id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}>
+                <span>{t.icon}</span><span>{t.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-hidden">
+            {tab === 'tasks'  && <PersonaTasks  member={member} />}
+            {tab === 'vision' && <VisionBoardView storageKey={visionKey} />}
+            {tab === 'mind'   && <MindView storageKey={mindKey} />}
+          </div>
+        </div>
+      );
+    }
+
     // ─── App root ─────────────────────────────────────────────────────────────────
     const VALID_SECTIONS = ['dashboard','tasks','deadlines','family','habits','medications','checklists','goals','triggers','journal','mind','sensei','vision','plan','settings'];
 
@@ -5287,6 +5449,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
     function App() {
       const [state, dispatch] = useReducer(reducer, initState);
       const [onboarding, setOnboarding] = useState(false);
+      const [activeMember, setActiveMember] = useState(null);
       const thinkingRef = useRef(false);
 
       useEffect(() => {
@@ -5594,6 +5757,10 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
         }
       };
 
+      if (activeMember) {
+        return <PersonaView member={activeMember} onBack={() => setActiveMember(null)} />;
+      }
+
       return (
         <>
           {onboarding && <Onboarding onDone={() => setOnboarding(false)} />}
@@ -5622,7 +5789,7 @@ Available tools: get_habits | get_tasks | get_deadlines | get_mind_thoughts | ge
           <Toast toast={state.toast} onDismiss={() => dispatch({ type:'TOAST', payload:null })} />
 
           <div className="flex h-screen overflow-hidden bg-gray-50">
-            <Sidebar section={state.section} onNav={s => dispatch({ type:'NAV', payload:s })} open={state.sidebarOpen} />
+            <Sidebar section={state.section} onNav={s => dispatch({ type:'NAV', payload:s })} open={state.sidebarOpen} onPersona={m => setActiveMember(m)} />
             <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
               <Header
                 section={state.section}
